@@ -33,6 +33,7 @@ const LIBS = {
   purify: ['vendor/view/purify.min.js'],
   hljs: ['vendor/view/highlight.min.js'],
   exif: ['vendor/view/full.umd.js'],
+  upng: ['vendor/codecs/upng.min.js'],
 };
 const libCache = {};
 

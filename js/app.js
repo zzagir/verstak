@@ -43,19 +43,68 @@ function rememberTool(id) {
   store.set('recent', [id, ...store.get('recent').filter(x => x !== id)].slice(0, 8));
 }
 
-function favButton(id) {
-  const btn = el('button', { class: 'fav-btn', type: 'button' });
-  const sync = () => {
-    const on = store.get('favorites').includes(id);
-    btn.classList.toggle('on', on);
-    btn.textContent = on ? '★ В избранном' : '☆ В избранное';
-  };
-  btn.addEventListener('click', () => {
-    const favs = store.get('favorites');
-    store.set('favorites', favs.includes(id) ? favs.filter(x => x !== id) : [id, ...favs]);
-    sync();
+const isFav = id => store.get('favorites').includes(id);
+function toggleFav(id) {
+  const favs = store.get('favorites');
+  store.set('favorites', favs.includes(id) ? favs.filter(x => x !== id) : [id, ...favs]);
+  syncFavs();
+}
+/** Обновляет все звёздочки, счётчик в шапке и блок «Избранное» на главной. */
+function syncStars() {
+  const favs = store.get('favorites');
+  document.querySelectorAll('.star').forEach(b => {
+    const on = favs.includes(b.dataset.id);
+    const glyph = on ? '★' : '☆';
+    if (b.textContent !== glyph) b.textContent = glyph;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+    const label = on ? 'Убрать из избранного' : 'Добавить в избранное';
+    b.title = LANG === 'en' ? T(label) : label;
+    b.setAttribute('aria-label', b.title);
   });
-  sync();
+}
+function syncFavs() {
+  const favs = store.get('favorites');
+  document.querySelectorAll('.fav-btn').forEach(b => { const on = favs.includes(b.dataset.id); b.classList.toggle('on', on); b.textContent = on ? '★ В избранном' : '☆ В избранное'; });
+  const cnt = $('.fav-count');
+  if (cnt) cnt.textContent = favs.length ? String(favs.length) : '';
+  const main = $('#main');
+  if (main && $('.hero', main) && !$('.tool-head', main)) { main.querySelectorAll('.personal').forEach(n => n.remove()); personalSections(main); }
+  syncStars();
+}
+
+function favPopover() {
+  const btn = $('.fav-toggle'), pop = $('.fav-pop');
+  if (!btn || !pop) return;
+  const c = viewCtx(LANG, ROOT, USE_PAGES);
+  const render = () => {
+    const ids = store.get('favorites').filter(id => TOOLS.some(t => t.id === id));
+    pop.innerHTML = ids.length
+      ? `<p class="fav-pop-title">${V.esc(c.t('Избранное'))}</p>` + ids.map(id => { const t = TOOLS.find(x => x.id === id); return `<a href="${V.toolUrl(c, id)}" class="cat-${t.cat}"><span class="tool-badge" aria-hidden="true">${V.esc(c.t(t.badge))}</span>${V.esc(c.t(t.title))}</a>`; }).join('')
+      : `<p class="hint">${V.esc(c.t('Нажмите ☆ на карточке любого инструмента, чтобы он появился здесь.'))}</p>`;
+  };
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = pop.hidden;
+    if (open) render();
+    pop.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('.fav-menu')) { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') pop.hidden = true; });
+}
+
+document.addEventListener('click', e => {
+  const star = e.target.closest('.star');
+  if (!star) return;
+  e.preventDefault();
+  toggleFav(star.dataset.id);
+});
+
+function favButton(id) {
+  const btn = el('button', { class: 'fav-btn', type: 'button', 'data-id': id, onclick: () => toggleFav(id) });
+  btn.textContent = isFav(id) ? '★ В избранном' : '☆ В избранное';
+  btn.classList.toggle('on', isFav(id));
   return btn;
 }
 
@@ -137,8 +186,8 @@ function bindSearch(main) {
   search.addEventListener('input', () => {
     const q = search.value.trim().toLowerCase();
     let any = false;
-    main.querySelectorAll('.tool-card').forEach(card => { card.hidden = !!q && !card.dataset.search.includes(q); any = any || !card.hidden; });
-    main.querySelectorAll('.cat-section').forEach(s => (s.hidden = ![...s.querySelectorAll('.tool-card')].some(cd => !cd.hidden)));
+    main.querySelectorAll('.card-wrap').forEach(w => { w.hidden = !!q && !w.querySelector('.tool-card').dataset.search.includes(q); any = any || !w.hidden; });
+    main.querySelectorAll('.cat-section').forEach(s => (s.hidden = ![...s.querySelectorAll('.card-wrap')].some(cd => !cd.hidden)));
     if (empty) empty.hidden = any;
   });
 }
@@ -202,6 +251,11 @@ if (USE_PAGES) {
   window.addEventListener('hashchange', routeHash);
   routeHash();
 }
+
+favPopover();
+syncFavs();
+// Звёздочки на карточках, которые появляются позже (смена страницы в режиме #, «Похожие»)
+new MutationObserver(() => { clearTimeout(syncStars.t); syncStars.t = setTimeout(syncStars, 50); }).observe($('#main'), { childList: true, subtree: true });
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
   navigator.serviceWorker.register(ROOT + 'sw.js').catch(() => { /* офлайн-режим недоступен */ });

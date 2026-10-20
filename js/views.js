@@ -34,9 +34,10 @@ V.feedback = (c, t) => {
 
 V.siteName = c => c.lang === 'en' ? SITE_CONFIG.nameEn : SITE_CONFIG.name;
 
-V.card = (c, t) => `<a class="tool-card cat-${t.cat}" href="${V.toolUrl(c, t.id)}" data-search="${V.esc(`${c.t(t.title)} ${c.t(t.desc)} ${t.title} ${t.id}`.toLowerCase())}">` +
+V.card = (c, t) => `<div class="card-wrap" data-id="${t.id}"><a class="tool-card cat-${t.cat}" href="${V.toolUrl(c, t.id)}" data-search="${V.esc(`${c.t(t.title)} ${c.t(t.desc)} ${t.title} ${t.id}`.toLowerCase())}">` +
   `<span class="tool-badge${[...c.t(t.badge)].length > 3 ? ' long' : ''}" aria-hidden="true">${V.esc(c.t(t.badge))}</span>` +
-  `<span class="tool-text"><strong>${V.esc(c.t(t.title))}</strong><span>${V.esc(c.t(t.desc))}</span></span></a>`;
+  `<span class="tool-text"><strong>${V.esc(c.t(t.title))}</strong><span>${V.esc(c.t(t.desc))}</span></span></a>` +
+  `<button class="star" type="button" data-id="${t.id}" aria-pressed="false" aria-label="${V.esc(c.t('Добавить в избранное'))}" title="${V.esc(c.t('Добавить в избранное'))}">☆</button></div>`;
 
 V.catTools = cat => TOOLS.filter(t => t.cat === cat);
 
@@ -145,7 +146,7 @@ V.privacyMain = c => c.lang === 'en'
 V.header = (c, altHref) => `<div class="wrap header-row">
 <a class="logo" href="${V.home(c)}"><span class="logo-mark" aria-hidden="true"></span>${V.esc(V.siteName(c))}</a>
 <nav class="site-nav" aria-label="${V.esc(c.t('Разделы'))}">${Object.keys(CATS).map(cat => `<a href="${V.catUrl(c, cat)}" data-cat="${cat}">${V.esc(c.t(CATS[cat].short || CATS[cat].title))}</a>`).join('')}</nav>
-<div class="header-tools">${altHref ? `<a class="lang-switch" href="${altHref}" hreflang="${c.lang === 'en' ? 'ru' : 'en'}">${c.lang === 'en' ? 'RU' : 'EN'}</a>` : ''}<button class="theme-toggle" type="button" aria-label="${V.esc(c.t('Тема оформления'))}" title="${V.esc(c.t('Тема оформления'))}"></button></div>
+<div class="header-tools"><div class="fav-menu"><button class="fav-toggle" type="button" aria-expanded="false" aria-label="${V.esc(c.t('Избранное'))}" title="${V.esc(c.t('Избранное'))}">★<span class="fav-count"></span></button><div class="fav-pop" hidden></div></div>${altHref ? `<a class="lang-switch" href="${altHref}" hreflang="${c.lang === 'en' ? 'ru' : 'en'}">${c.lang === 'en' ? 'RU' : 'EN'}</a>` : ''}<button class="theme-toggle" type="button" aria-label="${V.esc(c.t('Тема оформления'))}" title="${V.esc(c.t('Тема оформления'))}"></button></div>
 </div>`;
 
 V.footer = c => `<div class="wrap footer-row"><div class="footer-info"><p>${V.esc(c.t('Все файлы обрабатываются на вашем устройстве и никуда не отправляются.'))}</p>

@@ -77,6 +77,12 @@ const EN_DICT = {
   'Текст, фигуры, рисование, подпись, маркер, а также добавление, удаление и поворот страниц.': 'Text, shapes, drawing, signature and highlights, plus adding, deleting and rotating pages.',
   'Использовать сохранённую': 'Use saved signature', 'Забыть': 'Forget', 'Сохранённая подпись': 'Saved signature', 'Запомнить подпись на этом устройстве': 'Remember the signature on this device',
 
+  'Добавить в избранное': 'Add to favorites', 'Убрать из избранного': 'Remove from favorites', 'Нажмите ☆ на карточке любого инструмента, чтобы он появился здесь.': 'Click ☆ on any tool card to add it here.',
+  'Рекомендуемое — без видимой потери качества': 'Recommended — no visible quality loss', 'Сильное — меньше размер, качество чуть ниже': 'Strong — smaller size, slightly lower quality', 'Задать качество вручную': 'Set quality manually', 'Сжатие': 'Compression',
+  'Уменьшите вес JPG, PNG и WEBP в разы без видимой потери качества.': 'Make JPG, PNG and WEBP files several times smaller with no visible quality loss.',
+  'Сжатие как у iLoveIMG и TinyPNG: JPG кодируется MozJPEG, PNG — с уменьшением палитры и OxiPNG, качество подбирается автоматически так, чтобы разница не была видна. Метаданные EXIF удаляются.': 'Compression like iLoveIMG and TinyPNG: JPG is encoded with MozJPEG, PNG with palette reduction and OxiPNG, and quality is chosen automatically so the difference is not visible. EXIF metadata is removed.',
+  'уже оптимально сжат, оставлен исходный': 'already optimally compressed, original kept', 'это фото в PNG — в формате JPG или WEBP оно станет в разы меньше': 'this is a photo saved as PNG — as JPG or WEBP it would be several times smaller',
+  'Сжимаю ${1} из ${2}: ${3}': 'Compressing {1} of {2}: {3}',
   // Просмотр файлов
   '← Назад': '← Back', 'Открыть другой файл': 'Open another file', 'Открываю…': 'Opening…', 'Не удалось открыть файл.': 'Could not open the file.',
   'Формат «.${1}» пока не поддерживается. Поддерживаются Excel, Word, PowerPoint, PDF, DjVu, EPUB, FB2, архивы, письма, PSD, шрифты, видео, аудио, картинки и текстовые файлы.': 'The “.{1}” format is not supported yet. Supported: Excel, Word, PowerPoint, PDF, DjVu, EPUB, FB2, archives, emails, PSD, fonts, video, audio, images and text files.',

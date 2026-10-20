@@ -29,17 +29,112 @@ const sizeNote = (before, after) => {
   return d >= 0 ? `−${d}%` : `+${-d}%`;
 };
 
+/* ---------- Умное сжатие: MozJPEG, WebP, PNG-палитра + OxiPNG, качество по SSIM ---------- */
+
+const codecCache = {};
+function codec(name) {
+  if (!codecCache[name]) {
+    const path = { jpeg: 'codecs/jpeg/encode.js', webp: 'codecs/webp/encode.js', oxipng: 'codecs/oxipng/optimise.js' }[name];
+    codecCache[name] = import(new URL(ROOT + 'vendor/' + path, location.href).href).then(m => m.default);
+    codecCache[name].catch(() => delete codecCache[name]);
+  }
+  return codecCache[name];
+}
+const pixels = c => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height);
+
+/** Кодирует canvas лучшим доступным кодеком; q — качество 0…100. */
+async function encodeBest(canvas, mime, q) {
+  try {
+    if (mime === 'image/jpeg') return new Blob([await (await codec('jpeg'))(pixels(canvas), { quality: q, progressive: true, optimize_coding: true, trellis_multipass: true, chroma_subsample: q >= 90 ? 1 : 2 })], { type: mime });
+    if (mime === 'image/webp') return new Blob([await (await codec('webp'))(pixels(canvas), { quality: q, method: 4 })], { type: mime });
+  } catch (e) { console.warn('Кодек недоступен, использую встроенный', e); }
+  return canvasBlob(canvas, mime, q / 100);
+}
+
+/** PNG: уменьшение палитры (как TinyPNG) с проверкой качества, затем OxiPNG без потерь. */
+async function encodePng(canvas, minSsim, refSmall) {
+  await loadLib('upng');
+  const id = pixels(canvas);
+  let best = await canvasBlob(canvas, 'image/png');
+  if (minSsim < 1) {
+    for (const colors of [256, 128]) {
+      const q = new Blob([upngLib.UPNG.encode([id.data.buffer.slice(0)], canvas.width, canvas.height, colors)], { type: 'image/png' });
+      if (q.size < best.size && await similarity(refSmall, q) >= minSsim) best = q; else break;
+    }
+  }
+  try {
+    const opt = await (await codec('oxipng'))(await best.arrayBuffer(), { level: 2, interlace: false, optimiseAlpha: true });
+    if (opt.byteLength < best.size) best = new Blob([opt], { type: 'image/png' });
+  } catch (e) { console.warn('OxiPNG недоступен', e); }
+  return best;
+}
+
+/** Уменьшенная копия в оттенках серого для сравнения. */
+function lumaSmall(src, w, h) {
+  const k = Math.min(1, 640 / Math.max(w, h));
+  const c = makeCanvas(w * k, h * k), ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  const d = ctx.getImageData(0, 0, c.width, c.height).data, y = new Float32Array(c.width * c.height);
+  for (let i = 0; i < y.length; i++) y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  return { y, w: c.width, h: c.height };
+}
+
+/** SSIM по блокам 8×8: 1 — идентично, ≥ 0,98 — разница на глаз не видна. */
+function ssim(a, b) {
+  const C1 = 6.5025, C2 = 58.5225;
+  let sum = 0, n = 0;
+  for (let by = 0; by + 8 <= a.h; by += 8) for (let bx = 0; bx + 8 <= a.w; bx += 8) {
+    let ma = 0, mb = 0;
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const i = (by + y) * a.w + bx + x; ma += a.y[i]; mb += b.y[i]; }
+    ma /= 64; mb /= 64;
+    let va = 0, vb = 0, cov = 0;
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const i = (by + y) * a.w + bx + x, da = a.y[i] - ma, db = b.y[i] - mb; va += da * da; vb += db * db; cov += da * db; }
+    va /= 63; vb /= 63; cov /= 63;
+    sum += ((2 * ma * mb + C1) * (2 * cov + C2)) / ((ma * ma + mb * mb + C1) * (va + vb + C2));
+    n++;
+  }
+  return n ? sum / n : 1;
+}
+
+async function similarity(ref, blob) {
+  const bmp = await createImageBitmap(blob);
+  const s = ssim(ref, lumaSmall(bmp, bmp.width, bmp.height));
+  bmp.close?.();
+  return s;
+}
+
+/**
+ * Подбирает самое низкое качество, при котором картинка визуально не отличается (SSIM ≥ minSsim).
+ * Поиск идёт на уменьшенной копии, итоговое кодирование — один раз в полном размере.
+ */
+async function smartCompress(canvas, mime, minSsim) {
+  // PNG-палитра даёт мелкую зернистость, которую SSIM оценивает строже, чем глаз, — порог для PNG ниже
+  if (mime === 'image/png') return encodePng(canvas, minSsim - 0.03, lumaSmall(canvas, canvas.width, canvas.height));
+  const k = Math.min(1, 1600 / Math.max(canvas.width, canvas.height));
+  const proxy = k < 1 ? drawImageCanvas(canvas, canvas.width * k, canvas.height * k) : canvas;
+  const ref = lumaSmall(proxy, proxy.width, proxy.height);
+  let lo = 35, hi = 92, best = 92;
+  while (lo <= hi) {
+    const q = (lo + hi) >> 1;
+    if (await similarity(ref, await encodeBest(proxy, mime, q)) >= minSsim) { best = q; hi = q - 1; } else lo = q + 1;
+  }
+  return encodeBest(canvas, mime, best);
+}
+
 /** Подбирает качество (и при необходимости уменьшает размеры), чтобы файл уложился в limit байт. */
 async function compressToSize(img, w, h, mime, limit, name) {
   let best = null;
   for (let scale = 1, step = 0; step < 8; step++, scale *= 0.8) {
     const c = downscale(img, w * scale, h * scale, fillFor(mime));
-    let lo = 0.05, hi = 0.95, fit = null;
+    let lo = 5, hi = 95, fit = null;
     for (let it = 0; it < 7; it++) {
-      const q = (lo + hi) / 2;
-      const r = await exportCanvas(c, mime, q, name, '_сжато');
-      if (r.blob.size <= limit) { fit = r; lo = q; } else hi = q;
-      if (!best || r.blob.size < best.blob.size) best = r;
+      const q = Math.round((lo + hi) / 2);
+      const blob = await encodeBest(c, mime, q);
+      const r = { blob, name: `${baseName(name)}_сжато.${IMG_EXT[blob.type] || 'jpg'}` };
+      if (blob.size <= limit) { fit = r; lo = q; } else hi = q;
+      if (!best || blob.size < best.blob.size) best = r;
+      if (hi - lo <= 1) break;
     }
     if (fit) return fit;
   }
@@ -48,15 +143,16 @@ async function compressToSize(img, w, h, mime, limit, name) {
 
 fileTool({
   id: 'compress-image', cat: 'image', badge: 'КБ↓', title: 'Сжать изображение',
-  desc: 'Уменьшите вес JPG, PNG и WEBP с минимальной потерей качества.',
+  desc: 'Уменьшите вес JPG, PNG и WEBP в разы без видимой потери качества.',
   accept: IMG_ACCEPT, multiple: true, hint: IMG_HINT, action: 'Сжать',
+  note: 'Сжатие как у iLoveIMG и TinyPNG: JPG кодируется MozJPEG, PNG — с уменьшением палитры и OxiPNG, качество подбирается автоматически так, чтобы разница не была видна. Метаданные EXIF удаляются.',
   options: [
-    { id: 'mode', label: 'Как сжимать', type: 'select', choices: [['quality', 'Задать качество'], ['target', 'До нужного размера файла']] },
+    { id: 'mode', label: 'Сжатие', type: 'select', value: 'smart', choices: [['smart', 'Рекомендуемое — без видимой потери качества'], ['strong', 'Сильное — меньше размер, качество чуть ниже'], ['quality', 'Задать качество вручную'], ['target', 'До нужного размера файла']] },
     { id: 'target', label: 'Файл не больше', type: 'select', value: '500', showIf: v => v.mode === 'target', choices: SIZE_TARGETS,
       hint: 'Удобно для сайтов с ограничением размера: Госуслуги, вузы, анкеты на визу. Точное требование смотрите на нужном сайте.' },
     { id: 'custom', label: 'Свой размер, КБ', type: 'number', min: 10, value: 300, showIf: v => v.mode === 'target' && v.target === 'custom' },
-    { id: 'quality', label: 'Качество', type: 'range', min: 10, max: 100, value: 72, unit: '%', showIf: v => v.mode === 'quality' },
-    { id: 'format', label: 'Формат', type: 'select', choices: [['same', 'Как у исходного'], ['image/jpeg', 'JPG'], ['image/webp', 'WEBP — обычно меньше всего']], hint: 'PNG сжимается без потерь и почти не уменьшается. Для PNG выберите WEBP' },
+    { id: 'quality', label: 'Качество', type: 'range', min: 10, max: 100, value: 75, unit: '%', showIf: v => v.mode === 'quality' },
+    { id: 'format', label: 'Формат', type: 'select', choices: [['same', 'Как у исходного'], ['image/jpeg', 'JPG'], ['image/webp', 'WEBP — обычно меньше всего']] },
     { id: 'max', label: 'Ограничить большую сторону', type: 'select', value: '0', choices: [['0', 'Не менять размер'], ['3840', '3840 px (4K)'], ['2560', '2560 px'], ['1920', '1920 px (Full HD)'], ['1280', '1280 px'], ['800', '800 px']] },
   ],
   async run(files, o, { progress }) {
@@ -64,7 +160,7 @@ fileTool({
     let before = 0, after = 0;
     const limit = o.mode === 'target' ? (o.target === 'custom' ? Math.max(10, o.custom) : Number(o.target)) * 1024 : 0;
     for (const [i, f] of files.entries()) {
-      await progress(`Сжимаю ${i + 1} из ${files.length}`);
+      await progress(`Сжимаю ${i + 1} из ${files.length}: ${f.name}`);
       const img = await loadImage(f);
       let mime = o.format === 'same' ? sameMime(f) : o.format;
       const max = Number(o.max), W = img.naturalWidth, H = img.naturalHeight;
@@ -73,15 +169,17 @@ fileTool({
       if (limit) {
         if (mime === 'image/png') mime = 'image/webp';
         res = await compressToSize(img, W * k, H * k, mime, limit, f.name);
-        if (res.blob.size > limit) res.note = `не удалось уложиться в ${fmtSize(limit)}, получилось ${fmtSize(res.blob.size)}`;
-        else res.note = `${fmtSize(f.size)} → ${fmtSize(res.blob.size)}, ${sizeNote(f.size, res.blob.size)}`;
+        res.note = res.blob.size > limit ? `не удалось уложиться в ${fmtSize(limit)}, получилось ${fmtSize(res.blob.size)}` : `${fmtSize(f.size)} → ${fmtSize(res.blob.size)}, ${sizeNote(f.size, res.blob.size)}`;
         if (f.size <= limit && res.blob.size >= f.size) res = { blob: f, name: f.name, note: 'уже меньше нужного размера, оставлен исходный' };
       } else {
         const c = downscale(img, W * k, H * k, fillFor(mime));
-        res = await exportCanvas(c, mime, o.quality / 100, f.name, '_сжато');
-        if (res.blob.size >= f.size && k === 1 && mime === f.type) {
-          res = { blob: f, name: f.name, note: 'уже оптимально, оставлен исходный' };
-        } else res.note = `${fmtSize(f.size)} → ${fmtSize(res.blob.size)}, ${sizeNote(f.size, res.blob.size)}`;
+        const blob = o.mode === 'quality'
+          ? (mime === 'image/png' ? await encodePng(c, 0.97, lumaSmall(c, c.width, c.height)) : await encodeBest(c, mime, o.quality))
+          : await smartCompress(c, mime, o.mode === 'strong' ? 0.965 : 0.985);
+        res = { blob, name: `${baseName(f.name)}_сжато.${IMG_EXT[blob.type] || 'jpg'}` };
+        if (blob.size >= f.size && k === 1 && blob.type === f.type) res = { blob: f, name: f.name, note: 'уже оптимально сжат, оставлен исходный' };
+        else res.note = `${fmtSize(f.size)} → ${fmtSize(blob.size)}, ${sizeNote(f.size, blob.size)}`;
+        if (blob.type === 'image/png' && blob.size > f.size * 0.7) res.note += ' · это фото в PNG — в формате JPG или WEBP оно станет в разы меньше';
       }
       before += f.size; after += res.blob.size;
       out.push(res);
