@@ -15,6 +15,8 @@ for (const f of SCRIPTS.filter(f => f !== 'app.js')) vm.runInContext(fs.readFile
 const { TOOLS, CATS, V, SITE_CONFIG, viewCtx, seoData, T } = vm.runInContext('({ TOOLS, CATS, V, SITE_CONFIG, viewCtx, seoData, T })', ctx);
 
 const SITE = SITE_CONFIG.siteUrl.replace(/\/$/, '');
+/* Версия сборки в адресах скриптов и стилей: браузер и кеш GitHub Pages сразу берут новые файлы */
+const BUILD = Date.now().toString(36);
 const esc = V.esc;
 const written = [];
 
@@ -55,14 +57,14 @@ function write(lang, slug, { title, desc, main, bodyData = {}, jsonld = [] }) {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@400;600&family=Oswald:wght@700&family=Caveat:wght@400&family=Marck+Script&display=swap">
-<link rel="stylesheet" href="${root}css/style.css">
+<link rel="stylesheet" href="${root}css/style.css?v=${BUILD}">
 ${jsonld.map(j => `<script type="application/ld+json">${JSON.stringify(j)}</script>`).join('\n')}
 </head>
 <body${attrs}>
 <header class="site-header" id="site-header">${V.header(c, altHref)}</header>
 <main id="main" class="wrap">${main(c)}</main>
 <footer class="site-footer" id="site-footer">${V.footer(c)}</footer>
-${scripts.map(f => `<script src="${root}js/${f}"></script>`).join('\n')}
+${scripts.map(f => `<script src="${root}js/${f}?v=${BUILD}"></script>`).join('\n')}
 </body>
 </html>
 `;
@@ -134,7 +136,7 @@ fs.writeFileSync(path.join(DIR, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitem
 const PRECACHE = ['./', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg', ...SCRIPTS.map(f => `js/${f}`),
   'vendor/pdf-lib.min.js', 'vendor/pdf.min.js', 'vendor/pdf.worker.min.js', 'vendor/jszip.min.js'];
 const sw = fs.readFileSync(path.join(DIR, 'sw.template.js'), 'utf8')
-  .replace('__VERSION__', Date.now().toString(36))
+  .replace('__VERSION__', BUILD)
   .replace('__PRECACHE__', JSON.stringify(PRECACHE));
 fs.writeFileSync(path.join(DIR, 'sw.js'), sw);
 

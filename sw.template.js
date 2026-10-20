@@ -15,16 +15,15 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   const url = new URL(req.url);
-  if (req.method !== 'GET' || (url.origin !== location.origin && !url.host.endsWith('fonts.gstatic.com') && !url.host.endsWith('fonts.googleapis.com'))) return;
-  // Страницы: сначала сеть, чтобы сразу видеть обновления; без сети — из кеша.
-  if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res; })
-      .catch(() => caches.match(req).then(r => r || caches.match('./'))));
+  const fonts = url.host.endsWith('fonts.gstatic.com') || url.host.endsWith('fonts.googleapis.com');
+  if (req.method !== 'GET' || (url.origin !== location.origin && !fonts)) return;
+  const put = res => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); } return res; };
+  // Библиотеки и шрифты не меняются между версиями: из кеша, иначе из сети.
+  if (fonts || url.pathname.includes('/vendor/')) {
+    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(put)));
     return;
   }
-  // Скрипты, стили, шрифты, модели: из кеша, в фоне обновляем.
-  e.respondWith(caches.match(req).then(hit => {
-    const net = fetch(req).then(res => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); } return res; });
-    return hit || net;
-  }));
+  // Страницы, скрипты и стили сайта: всегда свежие из сети, кеш — только без интернета.
+  // Иначе после обновления старый скрипт из кеша может встретиться с новым и сломать страницу.
+  e.respondWith(fetch(req).then(put).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || (req.mode === 'navigate' ? caches.match('./') : undefined))));
 });

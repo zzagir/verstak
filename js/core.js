@@ -38,6 +38,7 @@ const LIBS = {
 const libCache = {};
 
 function loadLib(name) {
+  if (!LIBS[name]) return Promise.reject(new Error('Сайт обновился. Обновите страницу (Ctrl+F5), чтобы загрузить новую версию.'));
   if (!libCache[name]) {
     libCache[name] = Promise.all(LIBS[name].map(src => new Promise((resolve, reject) => {
       const node = src.endsWith('.css')

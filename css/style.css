@@ -519,7 +519,8 @@ a.chip.next:hover { border-color: var(--accent); color: var(--accent); }
 .viewer-head { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .viewer-title { min-width: 0; overflow-wrap: anywhere; }
 .viewer-actions { flex: 1; justify-content: flex-end; }
-.viewer-body { display: grid; gap: 14px; min-width: 0; }
+.viewer-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+.viewer-body > * { min-width: 0; max-width: 100%; }
 .viewer-body > .row input[type="search"] { width: auto; flex: 1; min-width: 180px; max-width: 360px; }
 .viewer-body select { width: auto; }
 
@@ -605,7 +606,7 @@ a.chip.next:hover { border-color: var(--accent); color: var(--accent); }
 .font-row > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .glyph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 4px; margin-top: 8px; font-size: 24px; }
 .glyph-grid span { display: grid; place-items: center; aspect-ratio: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
-.media-view { width: 100%; max-height: 75vh; background: #000; border-radius: var(--r); }
+.media-view { display: block; width: 100%; max-width: 100%; height: auto; max-height: 75vh; object-fit: contain; background: #000; border-radius: var(--r); }
 audio.media-view { background: transparent; }
 @media (max-width: 560px) { .mail-head > div { grid-template-columns: 1fr; gap: 0; } }
 
