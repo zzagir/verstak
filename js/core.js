@@ -21,6 +21,18 @@ const LIBS = {
   qrcode: ['vendor/qrcode.js'],
   jsqr: ['vendor/jsQR.js'],
   bg: ['vendor/bg/background-removal.min.js'],
+  xlsx: ['vendor/view/xlsx.full.min.js'],
+  docx: ['vendor/jszip.min.js', 'vendor/view/docx-preview.min.js'],
+  pptx: ['vendor/view/pptx-preview.min.js'],
+  rtf: ['vendor/view/rtf/WMFJS.bundle.min.js', 'vendor/view/rtf/EMFJS.bundle.min.js', 'vendor/view/rtf/RTFJS.bundle.min.js'],
+  djvu: ['vendor/view/djvu.min.js'],
+  psd: ['vendor/view/ag-psd.min.js'],
+  eml: ['vendor/view/postal-mime.min.js'],
+  msg: ['vendor/view/msgreader.min.js'],
+  markdown: ['vendor/view/marked.umd.js', 'vendor/view/purify.min.js'],
+  purify: ['vendor/view/purify.min.js'],
+  hljs: ['vendor/view/highlight.min.js'],
+  exif: ['vendor/view/full.umd.js'],
 };
 const libCache = {};
 
@@ -30,6 +42,7 @@ function loadLib(name) {
       const node = src.endsWith('.css')
         ? el('link', { rel: 'stylesheet', href: ROOT + src })
         : el('script', { src: ROOT + src });
+      node.async = false;
       node.onload = resolve;
       node.onerror = () => reject(new Error('Не удалось загрузить компонент сайта. Обновите страницу и попробуйте снова.'));
       document.head.append(node);
@@ -280,6 +293,7 @@ const CATS = {
   pdf: { title: 'PDF', lead: 'Объединение, разделение, сжатие и конвертация PDF-файлов.' },
   image: { title: 'Изображения', lead: 'Сжатие, размер, обрезка, форматы и простые правки фото.' },
   text: { title: 'Текст', lead: 'Транслит, регистр, типограф, SEO-анализ и оформление текста.' },
+  docs: { title: 'Документы и просмотр', short: 'Документы', lead: 'Откройте и конвертируйте Excel, Word, PowerPoint, DjVu, архивы, письма, книги и другие файлы без установки программ.' },
   dev: { title: 'Кодирование и генераторы', short: 'Утилиты', lead: 'Base64, хеши, JSON, QR-коды, пароли и другие утилиты.' },
 };
 const TOOLS = [];

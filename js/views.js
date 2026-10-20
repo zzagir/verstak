@@ -113,7 +113,7 @@ V.toolMain = (c, t) => {
     V.feedback(c, t) +
     '<div class="ad-slot" data-slot="bottom"></div>' +
     V.seo(c, t) +
-    (related.length ? `<section class="related"><h2>${V.esc(c.lang === 'en' ? `More ${({ pdf: 'PDF', image: 'image', text: 'text', dev: 'utility' })[t.cat]} tools` : `Ещё инструменты: ${CATS[t.cat].title}`)}</h2><div class="tool-grid compact">${related.map(x => V.card(c, x)).join('')}</div></section>` : '');
+    (related.length ? `<section class="related"><h2>${V.esc(c.lang === 'en' ? `More ${({ pdf: 'PDF', image: 'image', text: 'text', dev: 'utility', docs: 'document' })[t.cat]} tools` : `Ещё инструменты: ${CATS[t.cat].title}`)}</h2><div class="tool-grid compact">${related.map(x => V.card(c, x)).join('')}</div></section>` : '');
 };
 
 /* ---------- Служебные страницы ---------- */

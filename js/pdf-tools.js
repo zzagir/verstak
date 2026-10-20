@@ -434,7 +434,7 @@ fileTool({
   },
 });
 
-async function htmlToPdf(node, name) {
+async function htmlToPdf(node, name, { orientation = 'portrait' } = {}) {
   const holder = el('div', { class: 'render-holder' }, node);
   document.body.append(holder);
   try {
@@ -443,7 +443,7 @@ async function htmlToPdf(node, name) {
       filename: name,
       image: { type: 'jpeg', quality: 0.95 },
       html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation },
       pagebreak: { mode: ['css', 'legacy'] },
     }).from(node).outputPdf('blob');
   } finally {
@@ -942,11 +942,8 @@ async function zipDataUrl(zip, path) {
 }
 const zipResolve = (base, rel) => decodeURIComponent(new URL(rel, 'http://x/' + base).pathname.slice(1));
 
-fileTool({
-  id: 'epub-to-pdf', cat: 'pdf', badge: 'E→P', title: 'EPUB в PDF',
-  desc: 'Превратите электронную книгу EPUB в PDF для печати и чтения на компьютере.',
-  accept: '.epub,application/epub+zip', libs: ['jszip', 'html2pdf'], action: 'Создать PDF', note: BOOK_NOTE, zipName: 'books.zip',
-  async perFile(file, o, { progress }) {
+/** EPUB → { node, title }: главы книги одним HTML-блоком с картинками. */
+async function epubNode(file, progress = () => tick()) {
     await progress('Распаковываю книгу…');
     const zip = await JSZip.loadAsync(file);
     const container = await zip.file('META-INF/container.xml')?.async('text');
@@ -980,6 +977,15 @@ fileTool({
       chapter.innerHTML = [...body.childNodes].map(n => n.outerHTML ?? (n.nodeType === 3 ? xmlEsc(n.textContent) : '')).join('');
       node.append(chapter);
     }
+    return { node, title };
+}
+
+fileTool({
+  id: 'epub-to-pdf', cat: 'pdf', badge: 'E→P', title: 'EPUB в PDF',
+  desc: 'Превратите электронную книгу EPUB в PDF для печати и чтения на компьютере.',
+  accept: '.epub,application/epub+zip', libs: ['jszip', 'html2pdf'], action: 'Создать PDF', note: BOOK_NOTE, zipName: 'books.zip',
+  async perFile(file, o, { progress }) {
+    const { node } = await epubNode(file, progress);
     await progress('Верстаю страницы…');
     return [{ blob: await htmlToPdf(node, file.name), name: `${baseName(file.name)}.pdf` }];
   },
@@ -1017,11 +1023,8 @@ function fb2Html(node, bin) {
   return html;
 }
 
-fileTool({
-  id: 'fb2-to-pdf', cat: 'pdf', badge: 'F→P', title: 'FB2 в PDF',
-  desc: 'Сконвертируйте книгу FictionBook (.fb2 и .fb2.zip) в PDF.',
-  accept: '.fb2,.zip', libs: ['jszip', 'html2pdf'], action: 'Создать PDF', note: BOOK_NOTE, zipName: 'books.zip',
-  async perFile(file, o, { progress }) {
+/** FB2 или FB2.ZIP → { node, title }. */
+async function fb2Node(file, progress = () => tick()) {
     await progress('Читаю книгу…');
     let buf = new Uint8Array(await file.arrayBuffer());
     if (buf[0] === 0x50 && buf[1] === 0x4b) {
@@ -1044,6 +1047,15 @@ fileTool({
     const node = el('div', { class: 'doc-render book' });
     node.innerHTML = `<h1 class="book-title">${xmlEsc(title)}</h1>${author ? `<p class="author">${xmlEsc(author)}</p>` : ''}` +
       [...d.getElementsByTagName('body')].map(b => fb2Html(b, bin)).join('');
+    return { node, title };
+}
+
+fileTool({
+  id: 'fb2-to-pdf', cat: 'pdf', badge: 'F→P', title: 'FB2 в PDF',
+  desc: 'Сконвертируйте книгу FictionBook (.fb2 и .fb2.zip) в PDF.',
+  accept: '.fb2,.zip', libs: ['jszip', 'html2pdf'], action: 'Создать PDF', note: BOOK_NOTE, zipName: 'books.zip',
+  async perFile(file, o, { progress }) {
+    const { node } = await fb2Node(file, progress);
     await progress('Верстаю страницы…');
     return [{ blob: await htmlToPdf(node, file.name), name: `${baseName(file.name.replace(/\.zip$/i, ''))}.pdf` }];
   },
