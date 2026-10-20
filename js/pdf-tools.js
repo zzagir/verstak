@@ -271,29 +271,53 @@ fileTool({
   accept: PDF_ACCEPT, libs: ['pdfjs', 'pdflib'], action: 'Сжать',
   note: 'Страницы пересобираются как изображения: размер падает сильно, но текст перестаёт выделяться. Подходит для сканов и документов на отправку.',
   options: [
-    { id: 'level', label: 'Степень сжатия', type: 'select', value: 'medium', choices: [['high', 'Сильная — 72 dpi'], ['medium', 'Средняя — 110 dpi'], ['low', 'Слабая — 150 dpi, лучше качество']] },
+    { id: 'level', label: 'Степень сжатия', type: 'select', value: 'medium', choices: [['high', 'Сильная — 72 dpi'], ['medium', 'Средняя — 110 dpi'], ['low', 'Слабая — 150 dpi, лучше качество'], ['target', 'До нужного размера файла']] },
+    { id: 'target', label: 'Файл не больше', type: 'select', value: '1024', choices: SIZE_TARGETS, showIf: v => v.level === 'target',
+      hint: 'Удобно для Госуслуг, вузов и анкет с ограничением размера. Точное требование смотрите на нужном сайте.' },
+    { id: 'custom', label: 'Свой размер, КБ', type: 'number', min: 20, value: 1500, showIf: v => v.level === 'target' && v.target === 'custom' },
     { id: 'gray', label: 'Сделать чёрно-белым', type: 'checkbox' },
   ],
   async perFile(file, o, { progress }) {
-    const { dpi, q } = { high: { dpi: 72, q: 0.5 }, medium: { dpi: 110, q: 0.62 }, low: { dpi: 150, q: 0.78 } }[o.level];
     const src = await openPdfJs(file);
-    const out = await PDFLib.PDFDocument.create();
-    for (let i = 1; i <= src.numPages; i++) {
-      await progress(`Страница ${i} из ${src.numPages}`);
-      const page = await src.getPage(i);
-      const size = page.getViewport({ scale: 1 });
-      let canvas = await renderPdfPage(page, dpi / 72);
-      if (o.gray) {
-        const g = makeCanvas(canvas.width, canvas.height), ctx = g.getContext('2d');
-        ctx.filter = 'grayscale(1)';
-        ctx.drawImage(canvas, 0, 0);
-        canvas = g;
+    const build = async (dpi, q, label) => {
+      const out = await PDFLib.PDFDocument.create();
+      for (let i = 1; i <= src.numPages; i++) {
+        await progress(`${label}страница ${i} из ${src.numPages}`);
+        const page = await src.getPage(i);
+        const size = page.getViewport({ scale: 1 });
+        let canvas = await renderPdfPage(page, dpi / 72);
+        if (o.gray) {
+          const g = makeCanvas(canvas.width, canvas.height), ctx = g.getContext('2d');
+          ctx.filter = 'grayscale(1)';
+          ctx.drawImage(canvas, 0, 0);
+          canvas = g;
+        }
+        const jpg = await out.embedJpg(await (await canvasBlob(canvas, 'image/jpeg', q)).arrayBuffer());
+        out.addPage([size.width, size.height]).drawImage(jpg, { x: 0, y: 0, width: size.width, height: size.height });
+        page.cleanup();
       }
-      const jpg = await out.embedJpg(await (await canvasBlob(canvas, 'image/jpeg', q)).arrayBuffer());
-      out.addPage([size.width, size.height]).drawImage(jpg, { x: 0, y: 0, width: size.width, height: size.height });
-      page.cleanup();
+      return pdfBlob(await out.save());
+    };
+    let blob;
+    if (o.level === 'target') {
+      const limit = (o.target === 'custom' ? Math.max(20, o.custom) : Number(o.target)) * 1024;
+      if (file.size <= limit) return { files: [], message: `«${file.name}» уже меньше ${fmtSize(limit)} — сжимать не нужно.` };
+      const steps = [[150, 0.75], [130, 0.66], [110, 0.6], [96, 0.52], [84, 0.46], [72, 0.4], [60, 0.34], [50, 0.3], [40, 0.25]];
+      let lo = 0, hi = steps.length - 1, fit = null, smallest = null, attempt = 0;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const b = await build(...steps[mid], `Попытка ${++attempt}: `);
+        if (!smallest || b.size < smallest.size) smallest = b;
+        if (b.size <= limit) { fit = b; hi = mid - 1; } else lo = mid + 1;
+      }
+      blob = fit || smallest;
+      if (!fit) {
+        return { files: [{ blob, name: `${baseName(file.name)}_сжат.pdf` }], message: `Уложиться в ${fmtSize(limit)} не получилось: минимум для этого документа — ${fmtSize(blob.size)}. Попробуйте чёрно-белый режим или разделите PDF на части.` };
+      }
+    } else {
+      const { dpi, q } = { high: { dpi: 72, q: 0.5 }, medium: { dpi: 110, q: 0.62 }, low: { dpi: 150, q: 0.78 } }[o.level];
+      blob = await build(dpi, q, '');
     }
-    const blob = pdfBlob(await out.save());
     const saved = Math.round((1 - blob.size / file.size) * 100);
     if (blob.size >= file.size) {
       return { files: [], message: `Этот файл уже хорошо сжат: после обработки он стал бы ${fmtSize(blob.size)} вместо ${fmtSize(file.size)}. Попробуйте сильную степень или оставьте исходный.` };

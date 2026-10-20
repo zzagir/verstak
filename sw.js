@@ -1,8 +1,8 @@
 'use strict';
 /* Офлайн-режим. Не редактируйте sw.js — он создаётся из этого файла командой node build.js. */
-const VERSION = 'mvfxxmdg';
+const VERSION = 'mvfz4gid';
 const CACHE = `verstak-${VERSION}`;
-const PRECACHE = ["./","css/style.css","manifest.webmanifest","icons/icon.svg","js/config.js","js/core.js","js/i18n.js","js/i18n-en.js","js/pdf-tools.js","js/pdf-extra.js","js/image-tools.js","js/text-tools.js","js/dev-tools.js","js/views.js","js/app.js","vendor/pdf-lib.min.js","vendor/pdf.min.js","vendor/pdf.worker.min.js","vendor/jszip.min.js"];
+const PRECACHE = ["./","css/style.css","manifest.webmanifest","icons/icon.svg","js/config.js","js/core.js","js/i18n.js","js/i18n-en.js","js/pdf-tools.js","js/pdf-extra.js","js/pdf-editor.js","js/image-tools.js","js/text-tools.js","js/dev-tools.js","js/views.js","js/app.js","vendor/pdf-lib.min.js","vendor/pdf.min.js","vendor/pdf.worker.min.js","vendor/jszip.min.js"];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

@@ -8,7 +8,7 @@ const path = require('path');
 const vm = require('vm');
 
 const DIR = __dirname;
-const SCRIPTS = ['config.js', 'core.js', 'i18n.js', 'i18n-en.js', 'pdf-tools.js', 'pdf-extra.js', 'image-tools.js', 'text-tools.js', 'dev-tools.js', 'views.js', 'app.js'];
+const SCRIPTS = ['config.js', 'core.js', 'i18n.js', 'i18n-en.js', 'pdf-tools.js', 'pdf-extra.js', 'pdf-editor.js', 'image-tools.js', 'text-tools.js', 'dev-tools.js', 'views.js', 'app.js'];
 
 const ctx = vm.createContext({ console, URL, Intl, TextEncoder, TextDecoder });
 for (const f of SCRIPTS.filter(f => f !== 'app.js')) vm.runInContext(fs.readFileSync(path.join(DIR, 'js', f), 'utf8'), ctx, { filename: f });
@@ -36,6 +36,7 @@ function write(lang, slug, { title, desc, main, bodyData = {}, jsonld = [] }) {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}">
+<meta name="author" content="${esc(SITE_CONFIG.author)}">
 <link rel="canonical" href="${url}">
 <link rel="alternate" hreflang="ru" href="${SITE + pagePath('ru', slug)}">
 <link rel="alternate" hreflang="en" href="${SITE + pagePath('en', slug)}">
@@ -83,7 +84,7 @@ for (const lang of ['ru', 'en']) {
       : `${TOOLS.length} бесплатных инструментов: объединить, разделить и сжать PDF, PDF в Word и JPG, сжать и обрезать фото, удалить фон, транслит для ЧПУ, QR-коды. Файлы не загружаются на сервер.`,
     main: c => V.homeMain(c),
     bodyData: { page: 'home' },
-    jsonld: [{ '@context': 'https://schema.org', '@type': 'WebSite', name, url: home, inLanguage: lang }],
+    jsonld: [{ '@context': 'https://schema.org', '@type': 'WebSite', name, url: home, inLanguage: lang, author: { '@type': 'Person', name: SITE_CONFIG.author, email: SITE_CONFIG.contactEmail, url: SITE_CONFIG.github } }],
   });
 
   for (const cat of Object.keys(CATS)) {
@@ -105,7 +106,7 @@ for (const lang of ['ru', 'en']) {
       main: cc => V.toolMain(cc, tl),
       bodyData: { page: 'tool', tool: tl.id, cat: tl.cat },
       jsonld: [
-        { '@context': 'https://schema.org', '@type': 'WebApplication', name: s.title, description: s.desc, url, applicationCategory: 'UtilitiesApplication', operatingSystem: 'Any', browserRequirements: 'Requires JavaScript', inLanguage: lang, offers: { '@type': 'Offer', price: '0', priceCurrency: lang === 'en' ? 'USD' : 'RUB' } },
+        { '@context': 'https://schema.org', '@type': 'WebApplication', name: s.title, description: s.desc, url, applicationCategory: 'UtilitiesApplication', operatingSystem: 'Any', author: { '@type': 'Person', name: SITE_CONFIG.author, email: SITE_CONFIG.contactEmail, url: SITE_CONFIG.github }, browserRequirements: 'Requires JavaScript', inLanguage: lang, offers: { '@type': 'Offer', price: '0', priceCurrency: lang === 'en' ? 'USD' : 'RUB' } },
         { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: s.faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
         { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [[name, home], [t(CATS[tl.cat].title), SITE + pagePath(lang, tl.cat)], [s.title, url]].map(([n, u], i) => ({ '@type': 'ListItem', position: i + 1, name: n, item: u })) },
       ],

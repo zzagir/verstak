@@ -3,31 +3,101 @@
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'ru';
 const PAGE = document.body.dataset.page || '';
 
-/* ---------- Тема оформления: системная → светлая → тёмная ---------- */
+/* ---------- Тема оформления: светлая ⇄ тёмная (по умолчанию — как в системе) ---------- */
 
-const THEMES = ['system', 'light', 'dark'];
-const THEME_LABEL = { system: 'Тема: как в системе', light: 'Тема: светлая', dark: 'Тема: тёмная' };
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const effectiveTheme = () => document.documentElement.dataset.theme || (darkQuery.matches ? 'dark' : 'light');
 
 function applyTheme(mode) {
-  if (mode === 'system') delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = mode;
+  if (mode === 'light' || mode === 'dark') document.documentElement.dataset.theme = mode;
+  else delete document.documentElement.dataset.theme;
   const btn = $('.theme-toggle');
-  if (btn) {
-    const label = LANG === 'en' ? T(THEME_LABEL[mode]) : THEME_LABEL[mode];
-    btn.dataset.mode = mode; btn.title = label; btn.setAttribute('aria-label', label);
-  }
+  if (!btn) return;
+  const now = effectiveTheme();
+  const label = now === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему';
+  btn.dataset.mode = now;
+  btn.title = LANG === 'en' ? T(label) : label;
+  btn.setAttribute('aria-label', btn.title);
 }
 function initTheme() {
-  let mode = 'system';
-  try { mode = localStorage.getItem('theme') || 'system'; } catch { /* приватный режим */ }
-  applyTheme(THEMES.includes(mode) ? mode : 'system');
+  let mode = null;
+  try { mode = localStorage.getItem('theme'); } catch { /* приватный режим */ }
+  applyTheme(mode);
+  darkQuery.addEventListener?.('change', () => applyTheme(document.documentElement.dataset.theme));
   document.addEventListener('click', e => {
-    const btn = e.target.closest('.theme-toggle');
-    if (!btn) return;
-    const next = THEMES[(THEMES.indexOf(btn.dataset.mode || 'system') + 1) % THEMES.length];
+    if (!e.target.closest('.theme-toggle')) return;
+    const next = effectiveTheme() === 'dark' ? 'light' : 'dark';
     applyTheme(next);
     try { localStorage.setItem('theme', next); } catch { /* не сохраняем */ }
   });
+}
+
+/* ---------- Избранное и недавние ---------- */
+
+const store = {
+  get(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } },
+  set(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* не сохраняем */ } },
+};
+
+function rememberTool(id) {
+  store.set('recent', [id, ...store.get('recent').filter(x => x !== id)].slice(0, 8));
+}
+
+function favButton(id) {
+  const btn = el('button', { class: 'fav-btn', type: 'button' });
+  const sync = () => {
+    const on = store.get('favorites').includes(id);
+    btn.classList.toggle('on', on);
+    btn.textContent = on ? '★ В избранном' : '☆ В избранное';
+  };
+  btn.addEventListener('click', () => {
+    const favs = store.get('favorites');
+    store.set('favorites', favs.includes(id) ? favs.filter(x => x !== id) : [id, ...favs]);
+    sync();
+  });
+  sync();
+  return btn;
+}
+
+function personalSections(main) {
+  const hero = $('.hero', main);
+  if (!hero || $('.personal', main)) return;
+  const c = viewCtx(LANG, ROOT, USE_PAGES);
+  const block = (key, title) => {
+    const ids = store.get(key).filter(id => TOOLS.some(t => t.id === id));
+    if (!ids.length) return '';
+    return `<section class="cat-section personal"><div class="cat-head"><h2>${V.esc(c.t(title))}</h2>` +
+      (key === 'recent' ? `<button class="btn small ghost clear-recent" type="button">${V.esc(c.t('Очистить'))}</button>` : '') +
+      `</div><div class="tool-grid compact">${ids.map(id => V.card(c, TOOLS.find(t => t.id === id))).join('')}</div></section>`;
+  };
+  hero.insertAdjacentHTML('afterend', block('favorites', 'Избранное') + block('recent', 'Недавние'));
+  $('.clear-recent', main)?.addEventListener('click', e => { store.set('recent', []); e.target.closest('section').remove(); });
+}
+
+/* ---------- Вставка файлов из буфера и передача между инструментами ---------- */
+
+function activeDropzone() {
+  const root = $('#tool-root');
+  if (!root) return null;
+  const zones = [...root.querySelectorAll('.dz')];
+  return zones.find(z => z.offsetParent !== null) || zones.find(z => z.dataset.multi) || null;
+}
+
+document.addEventListener('paste', e => {
+  const files = [...(e.clipboardData?.files || [])];
+  if (!files.length) return;
+  const dz = activeDropzone();
+  if (!dz) return;
+  e.preventDefault();
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  dz.take(files.map(f => f.name && f.name !== 'image.png' ? f : new File([f], `вставка-${stamp}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: f.type })));
+});
+
+async function applyHandoff() {
+  const files = await takeHandoff();
+  if (!files) return;
+  const dz = activeDropzone();
+  if (dz) dz.take(files);
 }
 
 /* ---------- Аналитика и реклама из js/config.js ---------- */
@@ -81,6 +151,9 @@ function mountTool(t) {
     console.error(e);
     root.append(el('p', { class: 'status-msg error' }, 'Инструмент не запустился. Обновите страницу.'));
   }
+  rememberTool(t.id);
+  $('.tool-head > div')?.append(favButton(t.id));
+  applyHandoff();
 }
 
 function markNav(cat) {
@@ -102,6 +175,7 @@ function routeHash() {
   else main.innerHTML = V.homeMain(c);
   mountTool(t);
   bindSearch(main);
+  if (!t && !CATS[id]) personalSections(main);
   fillAds();
   markNav(t ? t.cat : CATS[id] ? id : '');
   const name = V.siteName(c);
@@ -116,6 +190,7 @@ initAnalytics();
 
 if (USE_PAGES) {
   mountTool(TOOLS.find(t => t.id === document.body.dataset.tool));
+  if (PAGE === 'home') personalSections($('#main'));
   bindSearch($('#main'));
   fillAds();
   markNav(document.body.dataset.cat || '');

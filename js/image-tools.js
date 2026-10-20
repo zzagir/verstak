@@ -29,29 +29,60 @@ const sizeNote = (before, after) => {
   return d >= 0 ? `−${d}%` : `+${-d}%`;
 };
 
+/** Подбирает качество (и при необходимости уменьшает размеры), чтобы файл уложился в limit байт. */
+async function compressToSize(img, w, h, mime, limit, name) {
+  let best = null;
+  for (let scale = 1, step = 0; step < 8; step++, scale *= 0.8) {
+    const c = downscale(img, w * scale, h * scale, fillFor(mime));
+    let lo = 0.05, hi = 0.95, fit = null;
+    for (let it = 0; it < 7; it++) {
+      const q = (lo + hi) / 2;
+      const r = await exportCanvas(c, mime, q, name, '_сжато');
+      if (r.blob.size <= limit) { fit = r; lo = q; } else hi = q;
+      if (!best || r.blob.size < best.blob.size) best = r;
+    }
+    if (fit) return fit;
+  }
+  return best;
+}
+
 fileTool({
   id: 'compress-image', cat: 'image', badge: 'КБ↓', title: 'Сжать изображение',
   desc: 'Уменьшите вес JPG, PNG и WEBP с минимальной потерей качества.',
   accept: IMG_ACCEPT, multiple: true, hint: IMG_HINT, action: 'Сжать',
   options: [
-    { id: 'quality', label: 'Качество', type: 'range', min: 10, max: 100, value: 72, unit: '%' },
+    { id: 'mode', label: 'Как сжимать', type: 'select', choices: [['quality', 'Задать качество'], ['target', 'До нужного размера файла']] },
+    { id: 'target', label: 'Файл не больше', type: 'select', value: '500', showIf: v => v.mode === 'target', choices: SIZE_TARGETS,
+      hint: 'Удобно для сайтов с ограничением размера: Госуслуги, вузы, анкеты на визу. Точное требование смотрите на нужном сайте.' },
+    { id: 'custom', label: 'Свой размер, КБ', type: 'number', min: 10, value: 300, showIf: v => v.mode === 'target' && v.target === 'custom' },
+    { id: 'quality', label: 'Качество', type: 'range', min: 10, max: 100, value: 72, unit: '%', showIf: v => v.mode === 'quality' },
     { id: 'format', label: 'Формат', type: 'select', choices: [['same', 'Как у исходного'], ['image/jpeg', 'JPG'], ['image/webp', 'WEBP — обычно меньше всего']], hint: 'PNG сжимается без потерь и почти не уменьшается. Для PNG выберите WEBP' },
     { id: 'max', label: 'Ограничить большую сторону', type: 'select', value: '0', choices: [['0', 'Не менять размер'], ['3840', '3840 px (4K)'], ['2560', '2560 px'], ['1920', '1920 px (Full HD)'], ['1280', '1280 px'], ['800', '800 px']] },
   ],
   async run(files, o, { progress }) {
     const out = [];
     let before = 0, after = 0;
+    const limit = o.mode === 'target' ? (o.target === 'custom' ? Math.max(10, o.custom) : Number(o.target)) * 1024 : 0;
     for (const [i, f] of files.entries()) {
       await progress(`Сжимаю ${i + 1} из ${files.length}`);
       const img = await loadImage(f);
-      const mime = o.format === 'same' ? sameMime(f) : o.format;
+      let mime = o.format === 'same' ? sameMime(f) : o.format;
       const max = Number(o.max), W = img.naturalWidth, H = img.naturalHeight;
       const k = max && Math.max(W, H) > max ? max / Math.max(W, H) : 1;
-      const c = downscale(img, W * k, H * k, fillFor(mime));
-      let res = await exportCanvas(c, mime, o.quality / 100, f.name, '_сжато');
-      if (res.blob.size >= f.size && k === 1 && mime === f.type) {
-        res = { blob: f, name: f.name, note: 'уже оптимально, оставлен исходный' };
-      } else res.note = `${fmtSize(f.size)} → ${fmtSize(res.blob.size)}, ${sizeNote(f.size, res.blob.size)}`;
+      let res;
+      if (limit) {
+        if (mime === 'image/png') mime = 'image/webp';
+        res = await compressToSize(img, W * k, H * k, mime, limit, f.name);
+        if (res.blob.size > limit) res.note = `не удалось уложиться в ${fmtSize(limit)}, получилось ${fmtSize(res.blob.size)}`;
+        else res.note = `${fmtSize(f.size)} → ${fmtSize(res.blob.size)}, ${sizeNote(f.size, res.blob.size)}`;
+        if (f.size <= limit && res.blob.size >= f.size) res = { blob: f, name: f.name, note: 'уже меньше нужного размера, оставлен исходный' };
+      } else {
+        const c = downscale(img, W * k, H * k, fillFor(mime));
+        res = await exportCanvas(c, mime, o.quality / 100, f.name, '_сжато');
+        if (res.blob.size >= f.size && k === 1 && mime === f.type) {
+          res = { blob: f, name: f.name, note: 'уже оптимально, оставлен исходный' };
+        } else res.note = `${fmtSize(f.size)} → ${fmtSize(res.blob.size)}, ${sizeNote(f.size, res.blob.size)}`;
+      }
       before += f.size; after += res.blob.size;
       out.push(res);
     }

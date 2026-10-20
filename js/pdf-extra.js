@@ -126,8 +126,16 @@ function signatureDialog(onDone) {
   };
   const err = el('div', { class: 'status' });
   const ok = el('button', { class: 'btn primary', type: 'button' }, 'Готово');
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('signature')); } catch { /* нет сохранённой */ }
+  const savedBox = saved && el('div', { class: 'sig-saved' },
+    el('img', { src: saved.src, alt: 'Сохранённая подпись' }),
+    el('button', { class: 'btn', type: 'button', onclick: () => { dlg.remove(); onDone(saved.src, saved.ratio); } }, 'Использовать сохранённую'),
+    el('button', { class: 'btn ghost small', type: 'button', onclick: e => { try { localStorage.removeItem('signature'); } catch { /* */ } e.target.closest('.sig-saved').remove(); } }, 'Забыть'));
+  const remember = el('input', { type: 'checkbox', id: 'sig-remember', checked: true });
   const dlg = el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Подпись' },
-    el('div', { class: 'modal-box' }, el('h2', {}, 'Ваша подпись'), tabBar, ...Object.values(panes), err,
+    el('div', { class: 'modal-box' }, el('h2', {}, 'Ваша подпись'), savedBox, tabBar, ...Object.values(panes), err,
+      el('label', { class: 'field check' }, remember, el('span', {}, 'Запомнить подпись на этом устройстве')),
       el('div', { class: 'row' }, ok, el('button', { class: 'btn ghost', type: 'button', onclick: () => dlg.remove() }, 'Отмена'))));
   ok.addEventListener('click', async () => {
     let c;
@@ -157,220 +165,13 @@ function signatureDialog(onDone) {
     }
     if (!c) return setStatus(err, 'error', 'Подпись пустая — нарисуйте её мышкой или пальцем.');
     dlg.remove();
-    onDone(c.toDataURL('image/png'), c.width / c.height);
+    const src = c.toDataURL('image/png');
+    if (remember.checked) { try { localStorage.setItem('signature', JSON.stringify({ src, ratio: c.width / c.height })); } catch { /* места нет */ } }
+    onDone(src, c.width / c.height);
   });
   show('draw');
   document.body.append(dlg);
 }
-
-const ED_TOOLS = [
-  ['select', 'Выбрать'], ['text', 'Текст'], ['image', 'Картинка'], ['sign', 'Подпись'],
-  ['rect', 'Рамка'], ['highlight', 'Маркер'], ['whiteout', 'Замазать'], ['check', 'Галочка ✓'],
-];
-
-function pdfEditorTool(root, startTool) {
-  let file = null, items = [], pages = [], current = 'select', pending = null, selected = null, seq = 0;
-  const status = el('div', { class: 'status', role: 'status', 'aria-live': 'polite' });
-  const results = el('div', { class: 'results' });
-  const color = el('input', { type: 'color', id: 'ed-color', value: '#1a1a1a', title: 'Цвет' });
-  const size = el('input', { type: 'number', id: 'ed-size', min: 6, max: 72, value: 14, title: 'Размер шрифта, pt' });
-  const imgInput = el('input', { type: 'file', accept: 'image/*', hidden: true });
-  const hint = el('span', { class: 'muted ed-hint' });
-  const toolBtns = ED_TOOLS.map(([k, l]) => el('button', { class: 'chip', type: 'button', 'data-tool': k, onclick: () => setTool(k) }, l));
-  const saveBtn = el('button', { class: 'btn primary', type: 'button' }, 'Сохранить PDF');
-  const bar = el('div', { class: 'ed-bar', hidden: true },
-    el('div', { class: 'chips' }, toolBtns),
-    el('div', { class: 'row' },
-      el('label', { for: 'ed-color', class: 'muted' }, 'Цвет'), color,
-      el('label', { for: 'ed-size', class: 'muted' }, 'Шрифт, pt'), size,
-      el('button', { class: 'btn ghost', type: 'button', onclick: () => dz.pick() }, 'Другой файл'), saveBtn),
-    hint);
-  const pagesBox = el('div', { class: 'ed-pages' });
-  const dz = dropzone({ accept: PDF_ACCEPT, onFiles: f => open(f[0]) });
-  root.append(dz, bar, status, pagesBox, results, imgInput);
-
-  const HINTS = {
-    select: 'Перетаскивайте элементы, тяните за правый нижний угол, чтобы изменить размер. Delete — удалить выделенное.',
-    text: 'Кликните на странице, где нужен текст, и печатайте.',
-    image: 'Выберите картинку, затем кликните на странице, куда её поставить.',
-    sign: 'Создайте подпись, затем кликните на странице, куда её поставить.',
-    rect: 'Кликните на странице — появится рамка, её можно растянуть.',
-    highlight: 'Кликните на строку — появится жёлтый маркер, растяните его по тексту.',
-    whiteout: 'Кликните на то, что нужно скрыть, — появится белый прямоугольник.',
-    check: 'Кликните, куда поставить галочку.',
-  };
-  function setTool(k) {
-    current = k;
-    toolBtns.forEach(b => b.classList.toggle('on', b.dataset.tool === k));
-    hint.textContent = HINTS[k];
-    pagesBox.dataset.tool = k;
-    if (k === 'image') { pending = null; imgInput.click(); }
-    if (k === 'sign') { pending = null; signatureDialog((src, ratio) => { pending = { src, ratio }; hint.textContent = 'Кликните на странице, куда поставить подпись.'; }); }
-  }
-  imgInput.addEventListener('change', async () => {
-    const f = imgInput.files[0];
-    imgInput.value = '';
-    if (!f) return setTool('select');
-    const img = await loadImage(f);
-    const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
-    const c = drawImageCanvas(img, img.naturalWidth * k, img.naturalHeight * k);
-    pending = { src: c.toDataURL(f.type === 'image/jpeg' ? 'image/jpeg' : 'image/png', 0.92), ratio: c.width / c.height };
-    hint.textContent = 'Кликните на странице, куда поставить картинку.';
-  });
-
-  async function open(f) {
-    file = f; items = []; selected = null;
-    results.replaceChildren(); pagesBox.replaceChildren();
-    try {
-      setStatus(status, 'busy', 'Открываю PDF…');
-      await Promise.all([loadLib('pdfjs'), loadLib('pdflib')]);
-      const doc = await openPdfJs(f);
-      pages = [];
-      for (let i = 1; i <= doc.numPages; i++) {
-        setStatus(status, 'busy', `Страница ${i} из ${doc.numPages}`);
-        const page = await doc.getPage(i);
-        const vp = page.getViewport({ scale: 1 });
-        const canvas = await renderPdfPage(page, 1.6);
-        const overlay = el('div', { class: 'ed-overlay' });
-        const wrap = el('div', { class: 'ed-page', style: `aspect-ratio: ${vp.width} / ${vp.height}` }, canvas, overlay);
-        const p = { index: i - 1, W: vp.width, H: vp.height, overlay };
-        overlay.addEventListener('pointerdown', e => { if (e.target === overlay) { e.preventDefault(); placeAt(p, e); } });
-        new ResizeObserver(() => overlay.style.setProperty('--k', overlay.clientWidth / p.W)).observe(overlay);
-        pages.push(p);
-        pagesBox.append(el('div', { class: 'ed-page-wrap' }, el('div', { class: 'muted ed-page-no' }, `Страница ${i}`), wrap));
-      }
-      status.replaceChildren();
-      dz.hidden = true; bar.hidden = false;
-      setTool(startTool);
-    } catch (e) { setStatus(status, 'error', e.message); }
-  }
-
-  function placeAt(p, e) {
-    const r = p.overlay.getBoundingClientRect();
-    const x = (e.clientX - r.left) / r.width * p.W, y = (e.clientY - r.top) / r.height * p.H;
-    if (current === 'select') { select(null); return; }
-    const fs = Number(size.value) || 14;
-    let it;
-    if (current === 'text') it = { type: 'text', x, y: y - fs * 0.6, w: Math.min(p.W - x, fs * 14), h: fs * 1.3, text: '', size: fs, color: color.value };
-    else if (current === 'image' || current === 'sign') {
-      if (!pending) return;
-      const w = current === 'sign' ? Math.min(160, p.W / 3) : Math.min(220, p.W / 2.5);
-      it = { type: 'image', x: x - w / 2, y: y - w / pending.ratio / 2, w, h: w / pending.ratio, src: pending.src };
-    }
-    else if (current === 'rect') it = { type: 'rect', x: x - 60, y: y - 25, w: 120, h: 50, color: color.value };
-    else if (current === 'highlight') it = { type: 'highlight', x: x - 4, y: y - 8, w: 140, h: 16, color: '#ffe14d' };
-    else if (current === 'whiteout') it = { type: 'whiteout', x: x - 50, y: y - 10, w: 100, h: 20 };
-    else if (current === 'check') it = { type: 'text', x: x - 7, y: y - 11, w: 22, h: 22, text: '✓', size: 18, color: color.value };
-    it.page = p.index; it.id = ++seq;
-    items.push(it);
-    mount(p, it);
-    if (current !== 'check' && current !== 'highlight') setTool('select');
-  }
-
-  function mount(p, it) {
-    const node = el('div', { class: `ed-item ed-type-${it.type}`, tabindex: 0 });
-    const place = () => {
-      node.style.left = `${it.x / p.W * 100}%`; node.style.top = `${it.y / p.H * 100}%`;
-      node.style.width = `${it.w / p.W * 100}%`; node.style.height = `${it.h / p.H * 100}%`;
-    };
-    if (it.type === 'text') {
-      const t = el('div', { class: 'ed-text', contenteditable: 'true', spellcheck: 'false', style: `--fs:${it.size}; color:${it.color}` }, it.text);
-      t.addEventListener('input', () => {
-        it.text = t.innerText.replace(/\n$/, '');
-        it.h = Math.max(it.h, t.scrollHeight / (p.overlay.clientWidth / p.W));
-        place();
-      });
-      node.append(t, el('span', { class: 'ed-move', title: 'Перетащить', 'aria-hidden': 'true' }, '⠿'));
-    } else if (it.type === 'image') node.append(el('img', { src: it.src, alt: '', draggable: 'false' }));
-    else if (it.type === 'rect') node.style.borderColor = it.color;
-    const handle = el('span', { class: 'ed-resize', 'aria-hidden': 'true' });
-    const del = el('button', { class: 'ed-del', type: 'button', 'aria-label': 'Удалить', onclick: () => remove(it, node) }, '×');
-    node.append(handle, del);
-    place();
-    p.overlay.append(node);
-    it.node = node;
-    if (it.type === 'text' && !it.text) node.querySelector('.ed-text').focus();
-
-    const drag = (e, mode) => {
-      e.preventDefault(); e.stopPropagation();
-      select(it);
-      const r = p.overlay.getBoundingClientRect(), k = p.W / r.width;
-      const sx = e.clientX, sy = e.clientY, ox = it.x, oy = it.y, ow = it.w, oh = it.h;
-      const move = ev => {
-        const dx = (ev.clientX - sx) * k, dy = (ev.clientY - sy) * k;
-        if (mode === 'move') { it.x = Math.max(-it.w / 2, Math.min(p.W - it.w / 2, ox + dx)); it.y = Math.max(-it.h / 2, Math.min(p.H - it.h / 2, oy + dy)); }
-        else {
-          it.w = Math.max(8, ow + dx);
-          it.h = it.type === 'image' ? it.w * oh / ow : Math.max(8, oh + dy);
-        }
-        place();
-      };
-      const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); };
-      addEventListener('pointermove', move); addEventListener('pointerup', up);
-    };
-    handle.addEventListener('pointerdown', e => drag(e, 'resize'));
-    node.addEventListener('pointerdown', e => {
-      if (e.target.classList.contains('ed-text') && document.activeElement === e.target) { select(it); return; }
-      if (e.target === del) return;
-      drag(e, 'move');
-    });
-    node.addEventListener('dblclick', () => node.querySelector('.ed-text')?.focus());
-    node.addEventListener('keydown', e => {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && !e.target.isContentEditable) { e.preventDefault(); remove(it, node); }
-    });
-    select(it);
-  }
-  function select(it) {
-    selected = it;
-    pagesBox.querySelectorAll('.ed-item').forEach(n => n.classList.toggle('sel', !!it && n === it.node));
-  }
-  function remove(it, node) { items = items.filter(x => x !== it); node.remove(); }
-
-  saveBtn.addEventListener('click', async () => {
-    try {
-      setStatus(status, 'busy', 'Сохраняю…');
-      const doc = await openPdf(file);
-      const live = items.filter(it => it.type !== 'text' || it.text.trim());
-      const font = live.some(it => it.type === 'text') ? await embedCyrFont(doc) : null;
-      const docPages = doc.getPages();
-      const imgCache = {};
-      for (const it of live) {
-        const page = docPages[it.page], g = pageGeom(page);
-        const x0 = it.x, x1 = it.x + it.w, y0 = g.H - (it.y + it.h), y1 = g.H - it.y;
-        if (it.type === 'text') {
-          it.text.split('\n').forEach((line, i) => {
-            if (line) drawTextVis(page, g, line, { vx: it.x, vy: g.H - it.y - it.size * (0.946 + i * 1.2), font, size: it.size, color: hexRgb(it.color) });
-          });
-        } else if (it.type === 'image') {
-          if (!imgCache[it.src]) {
-            const bytes = await (await fetch(it.src)).arrayBuffer();
-            imgCache[it.src] = it.src.startsWith('data:image/jpeg') ? await doc.embedJpg(bytes) : await doc.embedPng(bytes);
-          }
-          drawImageVis(page, g, imgCache[it.src], { x0, y0, x1, y1 });
-        } else {
-          const r = visRectToBox(g, x0, y0, x1, y1);
-          if (it.type === 'rect') page.drawRectangle({ ...r, borderColor: hexRgb(it.color), borderWidth: 1.5 });
-          else if (it.type === 'highlight') page.drawRectangle({ ...r, color: hexRgb(it.color), opacity: 0.45, blendMode: PDFLib.BlendMode.Multiply });
-          else page.drawRectangle({ ...r, color: PDFLib.rgb(1, 1, 1) });
-        }
-      }
-      status.replaceChildren();
-      renderResults(results, { files: [{ blob: pdfBlob(await doc.save()), name: `${baseName(file.name)}_изменён.pdf` }], message: live.length ? `Добавлено элементов: ${live.length}.` : 'Вы ничего не добавили — файл сохранён без изменений.' });
-      results.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (e) { console.error(e); setStatus(status, 'error', e.message); }
-  });
-}
-
-tool({
-  id: 'edit-pdf', cat: 'pdf', badge: 'Ред', title: 'Редактор PDF',
-  desc: 'Добавьте текст, картинки, подпись, рамки, маркер или закрасьте лишнее.',
-  render: root => pdfEditorTool(root, 'text'),
-});
-tool({
-  id: 'sign-pdf', cat: 'pdf', badge: 'Подп', title: 'Подписать PDF',
-  desc: 'Нарисуйте, напечатайте или загрузите подпись и поставьте её в документ.',
-  render: root => pdfEditorTool(root, 'sign'),
-});
 
 /* ===================== Заполнить форму ===================== */
 

@@ -16,7 +16,11 @@ const SITE_CONFIG = {
     bottom: '',  // под инструментом, перед описанием
     home: '',    // на главной после первого раздела
   },
-  /** E-mail для страницы «О сервисе». */
-  contactEmail: 'hello@verstak.example',
+  /** Контакты автора: подвал, «О сервисе», кнопка «Сообщить об ошибке». Пустые поля не показываются. */
+  author: 'zzagir',
+  contactEmail: 'zaynalov005@gmail.com',
+  github: 'https://github.com/zzagir',
+  repoUrl: 'https://github.com/zzagir/verstak',
+  telegram: '',  // например 'https://t.me/username'
 };
 if (typeof module !== 'undefined') module.exports = SITE_CONFIG;

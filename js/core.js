@@ -140,6 +140,8 @@ const expandRanges = ranges => ranges.flatMap(([a, b]) => Array.from({ length: b
 
 /* ---------- Изображения ---------- */
 
+const SIZE_TARGETS = [['100', '100 КБ'], ['200', '200 КБ'], ['300', '300 КБ'], ['500', '500 КБ'], ['1024', '1 МБ'], ['2048', '2 МБ'], ['5120', '5 МБ'], ['10240', '10 МБ'], ['custom', 'Свой размер']];
+
 const IMG_ACCEPT = 'image/*,.heic,.heif,.tif,.tiff';
 const isHeic = f => /\.(heic|heif)$/i.test(f.name) || /heic|heif/.test(f.type);
 const isTiff = f => /\.tiff?$/i.test(f.name) || f.type === 'image/tiff';
@@ -325,6 +327,9 @@ function dropzone({ accept, multiple, hint, onFiles, label }) {
   dz.addEventListener('dragleave', () => dz.classList.remove('over'));
   dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); take(e.dataTransfer.files); });
   dz.pick = () => input.click();
+  dz.take = take;
+  dz.classList.add('dz');
+  if (multiple) dz.dataset.multi = '1';
   return dz;
 }
 
@@ -417,6 +422,7 @@ function renderResults(box, res) {
   }
 
   if (!files.length) return;
+  const next = nextSteps(files);
   if (files.length > 1) {
     const zipBtn = el('button', { class: 'btn primary big', type: 'button' },
       `Скачать всё одним ZIP — ${files.length} ${plural(files.length, ['файл', 'файла', 'файлов'])}`);
@@ -450,6 +456,66 @@ function renderResults(box, res) {
       el('button', { class: 'btn small', type: 'button', onclick: () => download(f.blob, f.name) }, 'Скачать')));
   }
   box.append(list);
+  if (next) box.append(next);
+}
+
+/* ---------- Передача файла в следующий инструмент ---------- */
+
+function idb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('verstak', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbSet(key, value) {
+  const db = await idb();
+  await new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(value, key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+}
+async function idbTake(key) {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', 'readwrite'), st = tx.objectStore('kv'), g = st.get(key);
+    g.onsuccess = () => { st.delete(key); res(g.result); };
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+const LANG_PREFIX = () => (typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en/' : '');
+const toolLink = id => USE_PAGES ? `${ROOT}${LANG_PREFIX()}${id}/` : `#${id}`;
+
+const NEXT_TOOLS = {
+  pdf: ['compress-pdf', 'merge-pdf', 'edit-pdf', 'sign-pdf', 'organize-pdf', 'page-numbers', 'watermark-pdf', 'split-pdf', 'pdf-to-jpg', 'ocr'],
+  image: ['compress-image', 'resize-image', 'crop-image', 'watermark-image', 'remove-bg', 'convert-image', 'jpg-to-pdf', 'photo-editor'],
+};
+
+/** Блок «Что дальше?»: результат открывается в другом инструменте без повторной загрузки. */
+function nextSteps(files) {
+  const kind = files.every(f => f.blob.type === 'application/pdf' || /\.pdf$/i.test(f.name)) ? 'pdf'
+    : files.every(f => (f.blob.type || '').startsWith('image/')) ? 'image' : null;
+  if (!kind || typeof indexedDB === 'undefined') return null;
+  const current = document.querySelector('#tool-root')?.dataset.tool;
+  const ids = NEXT_TOOLS[kind].filter(id => id !== current && TOOLS.some(t => t.id === id)).slice(0, 7);
+  return el('div', { class: 'next-steps' },
+    el('span', { class: 'block-label' }, files.length > 1 ? 'Что дальше? Продолжить с этими файлами:' : 'Что дальше? Продолжить с этим файлом:'),
+    el('div', { class: 'chips' }, ids.map(id => {
+      const t = TOOLS.find(x => x.id === id);
+      return el('a', { class: 'chip next', href: toolLink(id), onclick: async e => {
+        e.preventDefault();
+        try { await idbSet('handoff', { t: Date.now(), files: files.map(f => ({ name: f.name, type: f.blob.type, blob: f.blob })) }); } catch { /* без передачи откроем пустой инструмент */ }
+        location.href = toolLink(id);
+      } }, t.title);
+    })));
+}
+
+/** Файлы, переданные из предыдущего инструмента (живут 10 минут). */
+async function takeHandoff() {
+  try {
+    const h = await idbTake('handoff');
+    if (!h || Date.now() - h.t > 10 * 60 * 1000) return null;
+    return h.files.map(f => new File([f.blob], f.name, { type: f.type }));
+  } catch { return null; }
 }
 
 function thumbFor(blob, name) {

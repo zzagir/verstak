@@ -15,6 +15,23 @@ V.home = c => c.pages ? V.base(c) : `${c.root}index.html#`;
 V.toolUrl = (c, id) => c.pages ? `${V.base(c)}${id}/` : `${c.root}index.html#${id}`;
 V.catUrl = (c, cat) => c.pages ? `${V.base(c)}${cat}/` : `${c.root}index.html#${cat}`;
 V.pageUrl = (c, p) => c.pages ? `${V.base(c)}${p}/` : `${c.root}index.html#${p}`;
+V.contacts = (c, subject) => {
+  const S = SITE_CONFIG, links = [];
+  if (S.contactEmail) links.push(`<a href="mailto:${S.contactEmail}${subject ? `?subject=${encodeURIComponent(subject)}` : ''}" class="notranslate">${V.esc(S.contactEmail)}</a>`);
+  if (S.telegram) links.push(`<a href="${V.esc(S.telegram)}" rel="noopener" target="_blank">Telegram</a>`);
+  if (S.github) links.push(`<a href="${V.esc(S.github)}" rel="noopener" target="_blank">GitHub</a>`);
+  return links.join('<span aria-hidden="true">·</span>');
+};
+
+V.feedback = (c, t) => {
+  const S = SITE_CONFIG, title = c.t(t.title);
+  const subject = `${V.siteName(c)}: ${title}`;
+  return `<aside class="feedback"><div><strong>${V.esc(c.t('Нашли ошибку или есть идея?'))}</strong><p>${V.esc(c.t('Напишите автору — инструменты дорабатываются по вашим отзывам.'))}</p></div>` +
+    `<div class="row">${S.contactEmail ? `<a class="btn" href="mailto:${S.contactEmail}?subject=${encodeURIComponent(subject)}">${V.esc(c.t('Написать на почту'))}</a>` : ''}` +
+    `${S.repoUrl ? `<a class="btn ghost" href="${V.esc(S.repoUrl)}/issues/new?title=${encodeURIComponent(subject)}" target="_blank" rel="noopener">${V.esc(c.t('Сообщить на GitHub'))}</a>` : ''}` +
+    `${S.telegram ? `<a class="btn ghost" href="${V.esc(S.telegram)}" target="_blank" rel="noopener">Telegram</a>` : ''}</div></aside>`;
+};
+
 V.siteName = c => c.lang === 'en' ? SITE_CONFIG.nameEn : SITE_CONFIG.name;
 
 V.card = (c, t) => `<a class="tool-card cat-${t.cat}" href="${V.toolUrl(c, t.id)}" data-search="${V.esc(`${c.t(t.title)} ${c.t(t.desc)} ${t.title} ${t.id}`.toLowerCase())}">` +
@@ -93,6 +110,7 @@ V.toolMain = (c, t) => {
     `<div><h1>${V.esc(c.t(t.title))}</h1><p>${V.esc(c.t(t.desc))}</p></div></header>` +
     '<div class="ad-slot" data-slot="top"></div>' +
     `<div id="tool-root" class="tool-root" data-tool="${t.id}"><noscript><p class="status-msg error">${V.esc(c.t('Для работы инструмента включите JavaScript.'))}</p></noscript></div>` +
+    V.feedback(c, t) +
     '<div class="ad-slot" data-slot="bottom"></div>' +
     V.seo(c, t) +
     (related.length ? `<section class="related"><h2>${V.esc(c.lang === 'en' ? `More ${({ pdf: 'PDF', image: 'image', text: 'text', dev: 'utility' })[t.cat]} tools` : `Ещё инструменты: ${CATS[t.cat].title}`)}</h2><div class="tool-grid compact">${related.map(x => V.card(c, x)).join('')}</div></section>` : '');
@@ -104,11 +122,11 @@ V.aboutMain = c => c.lang === 'en'
   ? `${V.crumbs(c, [[V.home(c), 'All tools'], [null, 'About']])}<article class="prose"><h1>About ${SITE_CONFIG.nameEn}</h1>
 <p>${SITE_CONFIG.nameEn} is a set of ${TOOLS.length} free online tools for PDF files, images and text. Merge and compress PDFs, convert documents and e-books, crop photos, remove backgrounds, make transliterated URLs, generate QR codes and much more.</p>
 <h2>Why it is safe</h2><p>All processing happens in your browser. Files are not uploaded to a server, are not stored and are not visible to anyone — including us. You can even use the site offline after the first visit.</p>
-<h2>Contact</h2><p>Ideas, bugs and partnership: <span class="notranslate">${V.esc(SITE_CONFIG.contactEmail)}</span></p></article>`
+<h2>Contact</h2><p>Author: <span class="notranslate">${V.esc(SITE_CONFIG.author)}</span>. Ideas, bugs and partnership: ${V.contacts(c, SITE_CONFIG.nameEn)}</p>${SITE_CONFIG.repoUrl ? `<p>The source code is open: <a href="${V.esc(SITE_CONFIG.repoUrl)}" target="_blank" rel="noopener">${V.esc(SITE_CONFIG.repoUrl.replace('https://', ''))}</a></p>` : ''}</article>`
   : `${V.crumbs(c, [[V.home(c), 'Все инструменты'], [null, 'О сервисе']])}<article class="prose"><h1>О сервисе ${SITE_CONFIG.name}</h1>
 <p>${SITE_CONFIG.name} — это ${TOOLS.length} бесплатных онлайн-инструментов для PDF, изображений и текста. Объединяйте и сжимайте PDF, конвертируйте документы и электронные книги, обрезайте фото, удаляйте фон, делайте транслит для ЧПУ, создавайте QR-коды и многое другое.</p>
 <h2>Почему это безопасно</h2><p>Вся обработка происходит в вашем браузере. Файлы не загружаются на сервер, не хранятся и никому не видны — даже нам. После первого посещения сайтом можно пользоваться даже без интернета.</p>
-<h2>Контакты</h2><p>Идеи, ошибки и сотрудничество: <span class="notranslate">${V.esc(SITE_CONFIG.contactEmail)}</span></p></article>`;
+<h2>Контакты</h2><p>Автор: <span class="notranslate">${V.esc(SITE_CONFIG.author)}</span>. Идеи, ошибки и сотрудничество: ${V.contacts(c, SITE_CONFIG.name)}</p>${SITE_CONFIG.repoUrl ? `<p>Исходный код открыт: <a href="${V.esc(SITE_CONFIG.repoUrl)}" target="_blank" rel="noopener">${V.esc(SITE_CONFIG.repoUrl.replace('https://', ''))}</a></p>` : ''}</article>`;
 
 V.privacyMain = c => c.lang === 'en'
   ? `${V.crumbs(c, [[V.home(c), 'All tools'], [null, 'Privacy policy']])}<article class="prose"><h1>Privacy policy</h1>
@@ -130,5 +148,6 @@ V.header = (c, altHref) => `<div class="wrap header-row">
 <div class="header-tools">${altHref ? `<a class="lang-switch" href="${altHref}" hreflang="${c.lang === 'en' ? 'ru' : 'en'}">${c.lang === 'en' ? 'RU' : 'EN'}</a>` : ''}<button class="theme-toggle" type="button" aria-label="${V.esc(c.t('Тема оформления'))}" title="${V.esc(c.t('Тема оформления'))}"></button></div>
 </div>`;
 
-V.footer = c => `<div class="wrap footer-row"><p>${V.esc(c.t('Все файлы обрабатываются на вашем устройстве и никуда не отправляются.'))}</p>
-<nav aria-label="${V.esc(c.t('Сервис'))}"><a href="${V.pageUrl(c, 'about')}">${V.esc(c.t('О сервисе'))}</a><a href="${V.pageUrl(c, 'privacy')}">${V.esc(c.t('Конфиденциальность'))}</a></nav></div>`;
+V.footer = c => `<div class="wrap footer-row"><div class="footer-info"><p>${V.esc(c.t('Все файлы обрабатываются на вашем устройстве и никуда не отправляются.'))}</p>
+<p class="footer-author">${V.esc(c.t('Автор'))}: <span class="notranslate">${V.esc(SITE_CONFIG.author)}</span> <span aria-hidden="true">·</span> ${V.contacts(c, V.siteName(c))}</p></div>
+<nav aria-label="${V.esc(c.t('Сервис'))}"><a href="${V.pageUrl(c, 'about')}">${V.esc(c.t('О сервисе'))}</a><a href="${V.pageUrl(c, 'privacy')}">${V.esc(c.t('Конфиденциальность'))}</a>${SITE_CONFIG.repoUrl ? `<a href="${V.esc(SITE_CONFIG.repoUrl)}" target="_blank" rel="noopener">${V.esc(c.t('Исходный код'))}</a>` : ''}</nav></div>`;
