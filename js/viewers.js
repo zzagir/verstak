@@ -130,35 +130,6 @@ function sheetTable(ws, query, limit = 2000) {
   return { table, rows: rows.length, cols, shown: shown.length };
 }
 
-async function viewExcel(file, box, ctx) {
-  const wb = await readWorkbook(file);
-  let current = wb.SheetNames[0];
-  const tabs = el('div', { class: 'chips sheet-tabs' });
-  const search = el('input', { type: 'search', id: 'sheet-q', placeholder: 'Найти в таблице…', 'aria-label': 'Поиск в таблице' });
-  const info = el('span', { class: 'muted' });
-  const holder = el('div', { class: 'sheet-wrap' });
-  const draw = () => {
-    tabs.replaceChildren(...wb.SheetNames.map(n => el('button', { class: `chip${n === current ? ' on' : ''}`, type: 'button', onclick: () => { current = n; draw(); } }, n)));
-    const r = sheetTable(wb.Sheets[current], search.value);
-    holder.replaceChildren(r.table);
-    info.textContent = `${r.rows} ${plural(r.rows, ['строка', 'строки', 'строк'])} × ${r.cols} ${plural(r.cols, ['столбец', 'столбца', 'столбцов'])}${r.shown < r.rows ? ` · показано ${r.shown}` : ''}`;
-  };
-  search.addEventListener('input', draw);
-  box.append(el('div', { class: 'row' }, wb.SheetNames.length > 1 && tabs, search, info), holder);
-  draw();
-  const base = baseName(file.name);
-  ctx.action('CSV для Excel', () => textBlob('﻿' + XLSX.utils.sheet_to_csv(wb.Sheets[current], { FS: ';' }), `${base}_${current}.csv`, 'text/csv;charset=utf-8'));
-  ctx.action('JSON', () => textBlob(JSON.stringify(XLSX.utils.sheet_to_json(wb.Sheets[current], { defval: '' }), null, 2), `${base}_${current}.json`, 'application/json'));
-  ctx.action('XLSX', () => ({ blob: new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name: `${base}.xlsx` }));
-  ctx.action('HTML', () => textBlob(htmlDoc(base, XLSX.utils.sheet_to_html(wb.Sheets[current], { header: '', footer: '' })), `${base}.html`, 'text/html'));
-  ctx.action('PDF', async () => {
-    await loadLib('html2pdf');
-    await ctx.progress('Верстаю PDF…');
-    const node = el('div', { class: 'doc-render sheet-pdf' }, el('h2', {}, current), sheetTable(wb.Sheets[current], '', 3000).table);
-    return { blob: await htmlToPdf(node, file.name, { orientation: 'landscape' }), name: `${base}_${current}.pdf` };
-  });
-}
-
 /* ---------- Документы ---------- */
 
 /** Текст из старого Word (.doc, 97–2003) по таблице фрагментов. */

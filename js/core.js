@@ -22,6 +22,7 @@ const LIBS = {
   jsqr: ['vendor/jsQR.js'],
   bg: ['vendor/bg/background-removal.min.js'],
   xlsx: ['vendor/view/xlsx.full.min.js'],
+  exceljs: ['vendor/view/exceljs.min.js'],
   docx: ['vendor/jszip.min.js', 'vendor/view/docx-preview.min.js'],
   pptx: ['vendor/view/pptx-preview.min.js'],
   rtf: ['vendor/view/rtf/WMFJS.bundle.min.js', 'vendor/view/rtf/EMFJS.bundle.min.js', 'vendor/view/rtf/RTFJS.bundle.min.js'],

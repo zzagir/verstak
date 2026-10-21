@@ -84,6 +84,9 @@ const EN_DICT = {
   'Сжатие как у iLoveIMG и TinyPNG: JPG кодируется MozJPEG, PNG — с уменьшением палитры и OxiPNG, качество подбирается автоматически так, чтобы разница не была видна. Метаданные EXIF удаляются.': 'Compression like iLoveIMG and TinyPNG: JPG is encoded with MozJPEG, PNG with palette reduction and OxiPNG, and quality is chosen automatically so the difference is not visible. EXIF metadata is removed.',
   'уже оптимально сжат, оставлен исходный': 'already optimally compressed, original kept', 'это фото в PNG — в формате JPG или WEBP оно станет в разы меньше': 'this is a photo saved as PNG — as JPG or WEBP it would be several times smaller',
   'Сжимаю ${1} из ${2}: ${3}': 'Compressing {1} of {2}: {3}',
+  'Адрес ячейки': 'Cell address', 'Содержимое ячейки': 'Cell contents', 'Найти…': 'Find…', '⛶ На весь экран': '⛶ Full screen', '✕ Выйти из полноэкранного': '✕ Exit full screen', 'Скрытый лист': 'Hidden sheet',
+  'Найдено: ${1}. Enter — следующее': 'Found: {1}. Enter — next', 'Ничего не найдено': 'Nothing found', 'ИСТИНА': 'TRUE', 'ЛОЖЬ': 'FALSE',
+  '${1} × ${2} · без оформления': '{1} × {2} · without formatting', '${1} × ${2} · показаны первые ${3} строк и ${4} столбцов': '{1} × {2} · first {3} rows and {4} columns shown',
   // Просмотр файлов
   '← Назад': '← Back', 'Открыть другой файл': 'Open another file', 'Открываю…': 'Opening…', 'Не удалось открыть файл.': 'Could not open the file.',
   'Формат «.${1}» пока не поддерживается. Поддерживаются Excel, Word, PowerPoint, PDF, DjVu, EPUB, FB2, архивы, письма, PSD, шрифты, видео, аудио, картинки и текстовые файлы.': 'The “.{1}” format is not supported yet. Supported: Excel, Word, PowerPoint, PDF, DjVu, EPUB, FB2, archives, emails, PSD, fonts, video, audio, images and text files.',

@@ -8,7 +8,7 @@ const path = require('path');
 const vm = require('vm');
 
 const DIR = __dirname;
-const SCRIPTS = ['config.js', 'core.js', 'i18n.js', 'i18n-en.js', 'pdf-tools.js', 'pdf-extra.js', 'pdf-editor.js', 'image-tools.js', 'text-tools.js', 'dev-tools.js', 'viewers.js', 'views.js', 'app.js'];
+const SCRIPTS = ['config.js', 'core.js', 'i18n.js', 'i18n-en.js', 'pdf-tools.js', 'pdf-extra.js', 'pdf-editor.js', 'image-tools.js', 'text-tools.js', 'dev-tools.js', 'sheet-view.js', 'viewers.js', 'views.js', 'app.js'];
 
 const ctx = vm.createContext({ console, URL, Intl, TextEncoder, TextDecoder });
 for (const f of SCRIPTS.filter(f => f !== 'app.js')) vm.runInContext(fs.readFileSync(path.join(DIR, 'js', f), 'utf8'), ctx, { filename: f });

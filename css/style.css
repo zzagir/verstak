@@ -628,3 +628,44 @@ audio.media-view { background: transparent; }
 .fav-pop .tool-badge { width: 30px; height: 30px; font-size: .55rem; border-radius: 7px; }
 .fav-pop-title { margin: 4px 8px 6px; font: 600 .75rem var(--f-body); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .fav-pop .hint { padding: 8px; }
+
+/* ===================== Таблицы как в Excel ===================== */
+.xl-app { --xl-line: #e1e1e1; --xl-head: #f3f3f3; --xl-head-line: #d4d4d4; --xl-sel: #217346; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); min-width: 0; }
+.xl-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.xl-toolbar select { width: auto; padding: 5px 8px; }
+.xl-find { width: 220px !important; max-width: 100%; padding: 6px 10px !important; }
+.xl-info, .xl-find-info { font-size: .82rem; }
+.xl-formula { display: flex; align-items: center; gap: 0; border-bottom: 1px solid var(--line); background: var(--surface); }
+.xl-name { width: 90px !important; flex: none; border: 0 !important; border-right: 1px solid var(--line) !important; border-radius: 0 !important; background: transparent !important; font: 500 .85rem var(--f-mono) !important; padding: 6px 8px !important; text-align: center; }
+.xl-fx-label { padding: 0 10px; font: italic 600 .9rem Georgia, serif; color: var(--muted); border-right: 1px solid var(--line); align-self: stretch; display: grid; place-items: center; }
+.xl-fx { flex: 1; border: 0 !important; border-radius: 0 !important; background: transparent !important; font: .9rem var(--f-mono) !important; padding: 6px 10px !important; min-width: 0; }
+.xl-scroll { overflow: auto; max-height: 70vh; min-height: 260px; background: #fff; outline: none; position: relative; }
+.xl-canvas { position: relative; width: max-content; }
+.xl-grid { border-collapse: collapse; table-layout: fixed; width: max-content; font: 11pt Calibri, "Segoe UI", Arial, sans-serif; color: #000; background: #fff; }
+.xl-grid td { border: 1px solid var(--xl-line); padding: 1px 4px; overflow: hidden; white-space: nowrap; text-overflow: clip; line-height: 1.2; position: relative; }
+.xl-grid.no-grid td { border-color: transparent; }
+.xl-grid td a { color: inherit; }
+.xl-grid th { background: var(--xl-head); border: 1px solid var(--xl-head-line); font: 400 .78rem "Segoe UI", Arial, sans-serif; color: #595959; text-align: center; padding: 0 2px; user-select: none; }
+.xl-grid thead th { position: sticky; top: 0; z-index: 4; }
+.xl-grid th.xl-rh { position: sticky; left: 0; z-index: 3; text-align: center; }
+.xl-grid th.xl-corner { position: sticky; left: 0; top: 0; z-index: 6; }
+.xl-grid thead th.fz { z-index: 5; }
+.xl-grid th.xl-rh.fz { z-index: 5; }
+.xl-grid td.fz { position: sticky; background-color: #fff; }
+.xl-grid td.fz[style*="background"] { background-clip: padding-box; }
+.xl-grid th.hl { background: #d2d2d2; color: #000; border-bottom-color: var(--xl-sel); }
+.xl-grid td.sel { outline: 2px solid var(--xl-sel); outline-offset: -1px; z-index: 1; }
+.xl-grid td.found { box-shadow: inset 0 0 0 999px rgb(255 214 0 / .35); }
+.xl-note { position: absolute; top: 0; right: 0; width: 0; height: 0; border-style: solid; border-width: 0 6px 6px 0; border-color: transparent #c00000 transparent transparent; }
+.xl-img { position: absolute; z-index: 3; pointer-events: none; }
+.xl-tabs { display: flex; gap: 2px; overflow-x: auto; padding: 0 8px; background: var(--xl-head); border-top: 1px solid var(--xl-head-line); }
+.xl-tab { flex: none; border: 0; border-bottom: 3px solid var(--tab, transparent); background: transparent; color: #444; padding: 7px 14px 5px; font: 500 .85rem var(--f-body); cursor: pointer; white-space: nowrap; }
+.xl-tab:hover { background: #e6e6e6; }
+.xl-tab.on { background: #fff; color: var(--xl-sel); font-weight: 700; box-shadow: inset 0 -2px 0 var(--xl-sel); }
+.xl-tab.hid { opacity: .55; font-style: italic; }
+.xl-app:fullscreen, .xl-app.pseudo-fs { border-radius: 0; border: 0; }
+.xl-app.pseudo-fs { position: fixed; inset: 0; z-index: 1000; padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0); }
+.xl-app:fullscreen .xl-scroll, .xl-app.pseudo-fs .xl-scroll { flex: 1; max-height: none; }
+body.xl-lock { overflow: hidden; }
+.xl-print .xl-grid td { border: 1px solid #ddd; }
+.xl-print .xl-grid th { display: none; }
