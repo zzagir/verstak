@@ -54,7 +54,7 @@ V.homeMain = c => {
     ? `${n} free tools that run right in your browser. Files never leave your device, so it is fast and safe even for contracts and passport scans.`
     : `${n} ${plural(n, ['бесплатный инструмент', 'бесплатных инструмента', 'бесплатных инструментов'])}, которые работают прямо в браузере. Файлы не покидают ваш компьютер, поэтому это быстро и безопасно даже для договоров и сканов паспорта.`;
   const cats = Object.keys(CATS);
-  return `<section class="hero"><h1>${V.esc(c.t('PDF, картинки и текст — '))}<em>${V.esc(c.t('без загрузки на сервер'))}</em></h1>` +
+  return `<section class="hero home-hero"><h1>${V.esc(c.t('PDF, картинки и текст — '))}<em>${V.esc(c.t('без загрузки на сервер'))}</em></h1>` +
     `<p class="lead">${V.esc(lead)}</p>${V.search(c)}</section>` +
     cats.map((cat, i) => V.catSection(c, cat) + (i === 0 ? '<div class="ad-slot" data-slot="home"></div>' : '')).join('');
 };

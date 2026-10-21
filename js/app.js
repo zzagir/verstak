@@ -69,7 +69,7 @@ function syncFavs() {
   const cnt = $('.fav-count');
   if (cnt) cnt.textContent = favs.length ? String(favs.length) : '';
   const main = $('#main');
-  if (main && $('.hero', main) && !$('.tool-head', main)) { main.querySelectorAll('.personal').forEach(n => n.remove()); personalSections(main); }
+  if (main && $('.home-hero', main)) { main.querySelectorAll('.personal').forEach(n => n.remove()); personalSections(main); }
   syncStars();
 }
 
@@ -109,7 +109,7 @@ function favButton(id) {
 }
 
 function personalSections(main) {
-  const hero = $('.hero', main);
+  const hero = $('.home-hero', main);  // только на главной, не в разделах
   if (!hero || $('.personal', main)) return;
   const c = viewCtx(LANG, ROOT, USE_PAGES);
   const block = (key, title) => {
