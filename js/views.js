@@ -63,8 +63,9 @@ V.crumbs = (c, items) => `<nav class="crumbs" aria-label="${V.esc(c.t('Нави�
   items.map(([href, label]) => href ? `<a href="${href}">${V.esc(label)}</a>` : `<span>${V.esc(label)}</span>`).join('<span aria-hidden="true">/</span>') + '</nav>';
 
 V.catMain = (c, cat) => V.crumbs(c, [[V.home(c), c.t('Все инструменты')], [null, c.t(CATS[cat].title)]]) +
-  `<section class="hero compact"><h1>${V.esc(c.lang === 'en' ? `${T(CATS[cat].title)} tools online` : `Инструменты: ${CATS[cat].title}`)}</h1><p class="lead">${V.esc(c.t(CATS[cat].lead))}</p>${V.search(c)}</section>` +
-  `<div class="tool-grid">${V.catTools(cat).map(t => V.card(c, t)).join('')}</div>` +
+  `<section class="hero compact cat-hero" data-cat="${cat}"><h1>${V.esc(c.lang === 'en' ? `${T(CATS[cat].title)} tools online` : `Инструменты: ${CATS[cat].title}`)}</h1><p class="lead">${V.esc(c.t(CATS[cat].lead))}</p>${V.search(c)}</section>` +
+  `<section class="cat-section cat-own"><div class="cat-head"><h2>${V.esc(c.t('Все инструменты раздела'))}<span class="count">${V.catTools(cat).length}</span></h2></div>` +
+  `<div class="tool-grid">${V.catTools(cat).map(t => V.card(c, t)).join('')}</div></section>` +
   Object.keys(CATS).filter(k => k !== cat).map(k => V.catSection(c, k)).join('');
 
 /* ---------- SEO-описание инструмента ---------- */

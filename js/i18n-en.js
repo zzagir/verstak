@@ -77,6 +77,7 @@ const EN_DICT = {
   'Текст, фигуры, рисование, подпись, маркер, а также добавление, удаление и поворот страниц.': 'Text, shapes, drawing, signature and highlights, plus adding, deleting and rotating pages.',
   'Использовать сохранённую': 'Use saved signature', 'Забыть': 'Forget', 'Сохранённая подпись': 'Saved signature', 'Запомнить подпись на этом устройстве': 'Remember the signature on this device',
 
+  'Все инструменты раздела': 'All tools in this section', 'Избранное в разделе': 'Favorites in this section', 'Недавние в разделе': 'Recent in this section',
   'Добавить в избранное': 'Add to favorites', 'Убрать из избранного': 'Remove from favorites', 'Нажмите ☆ на карточке любого инструмента, чтобы он появился здесь.': 'Click ☆ on any tool card to add it here.',
   'Рекомендуемое — без видимой потери качества': 'Recommended — no visible quality loss', 'Сильное — меньше размер, качество чуть ниже': 'Strong — smaller size, slightly lower quality', 'Задать качество вручную': 'Set quality manually', 'Сжатие': 'Compression',
   'Уменьшите вес JPG, PNG и WEBP в разы без видимой потери качества.': 'Make JPG, PNG and WEBP files several times smaller with no visible quality loss.',

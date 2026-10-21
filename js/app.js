@@ -69,7 +69,7 @@ function syncFavs() {
   const cnt = $('.fav-count');
   if (cnt) cnt.textContent = favs.length ? String(favs.length) : '';
   const main = $('#main');
-  if (main && $('.home-hero', main)) { main.querySelectorAll('.personal').forEach(n => n.remove()); personalSections(main); }
+  if (main && $('.home-hero, .cat-hero', main)) { main.querySelectorAll('.personal').forEach(n => n.remove()); personalSections(main); }
   syncStars();
 }
 
@@ -108,19 +108,25 @@ function favButton(id) {
   return btn;
 }
 
+/** Избранное и недавние: на главной — все, на странице раздела — только инструменты этого раздела. */
 function personalSections(main) {
-  const hero = $('.home-hero', main);  // только на главной, не в разделах
+  const hero = $('.home-hero, .cat-hero', main);
   if (!hero || $('.personal', main)) return;
+  const cat = hero.dataset.cat || null;
   const c = viewCtx(LANG, ROOT, USE_PAGES);
   const block = (key, title) => {
-    const ids = store.get(key).filter(id => TOOLS.some(t => t.id === id));
+    const ids = store.get(key).filter(id => TOOLS.some(t => t.id === id && (!cat || t.cat === cat)));
     if (!ids.length) return '';
-    return `<section class="cat-section personal"><div class="cat-head"><h2>${V.esc(c.t(title))}</h2>` +
+    return `<section class="cat-section personal" data-key="${key}"><div class="cat-head"><h2>${V.esc(c.t(title))}</h2>` +
       (key === 'recent' ? `<button class="btn small ghost clear-recent" type="button">${V.esc(c.t('Очистить'))}</button>` : '') +
       `</div><div class="tool-grid compact">${ids.map(id => V.card(c, TOOLS.find(t => t.id === id))).join('')}</div></section>`;
   };
-  hero.insertAdjacentHTML('afterend', block('favorites', 'Избранное') + block('recent', 'Недавние'));
-  $('.clear-recent', main)?.addEventListener('click', e => { store.set('recent', []); e.target.closest('section').remove(); });
+  hero.insertAdjacentHTML('afterend', block('favorites', cat ? 'Избранное в разделе' : 'Избранное') + block('recent', cat ? 'Недавние в разделе' : 'Недавние'));
+  $('.clear-recent', main)?.addEventListener('click', e => {
+    // На странице раздела очищаем только его инструменты
+    store.set('recent', cat ? store.get('recent').filter(id => TOOLS.find(t => t.id === id)?.cat !== cat) : []);
+    e.target.closest('section').remove();
+  });
 }
 
 /* ---------- Вставка файлов из буфера и передача между инструментами ---------- */
@@ -224,7 +230,7 @@ function routeHash() {
   else main.innerHTML = V.homeMain(c);
   mountTool(t);
   bindSearch(main);
-  if (!t && !CATS[id]) personalSections(main);
+  if (!t) personalSections(main);
   fillAds();
   markNav(t ? t.cat : CATS[id] ? id : '');
   const name = V.siteName(c);
@@ -239,7 +245,7 @@ initAnalytics();
 
 if (USE_PAGES) {
   mountTool(TOOLS.find(t => t.id === document.body.dataset.tool));
-  if (PAGE === 'home') personalSections($('#main'));
+  if (PAGE === 'home' || PAGE === 'cat') personalSections($('#main'));
   bindSearch($('#main'));
   fillAds();
   markNav(document.body.dataset.cat || '');

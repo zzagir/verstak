@@ -1,6 +1,6 @@
 'use strict';
 /* Офлайн-режим. Не редактируйте sw.js — он создаётся из этого файла командой node build.js. */
-const VERSION = 'mvi6y04s';
+const VERSION = 'mvi7ckfw';
 const CACHE = `verstak-${VERSION}`;
 const PRECACHE = ["./","css/style.css","manifest.webmanifest","icons/icon.svg","js/config.js","js/core.js","js/i18n.js","js/i18n-en.js","js/pdf-tools.js","js/pdf-extra.js","js/pdf-editor.js","js/image-tools.js","js/text-tools.js","js/dev-tools.js","js/viewers.js","js/views.js","js/app.js","vendor/pdf-lib.min.js","vendor/pdf.min.js","vendor/pdf.worker.min.js","vendor/jszip.min.js"];
 
