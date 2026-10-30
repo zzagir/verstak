@@ -32,6 +32,7 @@ function ffLoad() {
 
 /** Останавливает текущую обработку: движок перезапустится при следующей. */
 async function ffCancel() {
+  if (wcCurrent) { try { await wcCurrent.cancel(); } catch { /* уже завершено */ } wcCurrent = null; }
   if (!ffState) return;
   const p = ffState;
   ffState = null;
@@ -54,7 +55,12 @@ function ffRun({ inputs = [], args, outputs = [], outputPrefix = null, duration 
       logs.push(message);
       if (logs.length > 400) logs.shift();
       const t = message.match(/time=\s*(\d+:\d+:\d+\.\d+)/);
-      if (t && duration && progress) progress(`${label}: ${Math.min(99, Math.round(tsec(t[1]) / duration * 100))}%`);
+      if (!t || !progress) return;
+      const done = tsec(t[1]), sp = parseFloat((message.match(/speed=\s*([\d.]+)x/) || [])[1]) || 0;
+      const fr = (message.match(/frame=\s*(\d+)/) || [])[1];
+      const pct = duration ? Math.min(99, Math.floor(done / duration * 100)) : null;
+      const left = duration && sp > 0 ? (duration - done) / sp : 0;
+      progress([`${label}: ${pct != null ? pct + '%' : fmtTime(done)}`, fr && `кадр ${fr}`, left > 5 && `осталось ~${left > 90 ? Math.round(left / 60) + ' мин' : Math.round(left) + ' с'}`].filter(Boolean).join(' · '));
     };
     ff.on('log', onLog);
     try {
@@ -132,6 +138,59 @@ async function mediaInfo(file) {
   if (quick && (quick.width || !/^video\//.test(file.type))) return quick;
   const p = await ffProbe(file);
   return { duration: p.duration, width: p.video?.width || 0, height: p.video?.height || 0, probe: p };
+}
+
+/* ---------- Быстрый путь: WebCodecs (кодирование силами видеокарты) через Mediabunny ---------- */
+
+let mbLib = null, wcCurrent = null;
+const mediabunny = () => (mbLib = mbLib || import(new URL(ROOT + 'vendor/video/mediabunny.min.mjs', location.href).href).catch(e => { mbLib = null; throw e; }));
+
+/**
+ * Перекодирует в MP4 средствами браузера — в разы быстрее FFmpeg.
+ * Возвращает null, если браузер или файл не подходят: тогда используется FFmpeg.
+ * opts: { height, quality: 'low'|'medium'|'high'|'very-high', bitrate (бит/с), audioKbps | 0 (без звука), crop, rotate, trim }
+ */
+async function webcodecsMp4(file, opts, progress, label = 'Обработка') {
+  if (typeof VideoEncoder === 'undefined' || typeof VideoDecoder === 'undefined') return null;
+  let M;
+  try { M = await mediabunny(); } catch { return null; }
+  try {
+    const input = new M.Input({ source: new M.BlobSource(file), formats: M.ALL_FORMATS });
+    const vt = await input.getPrimaryVideoTrack();
+    if (!vt || !(await vt.canDecode())) return null;
+    const W = vt.displayWidth, H = vt.displayHeight;
+    const scale = opts.height && Math.min(W, H) > opts.height ? opts.height / Math.min(W, H) : 1;
+    const w = Math.round(W * scale / 2) * 2, h = Math.round(H * scale / 2) * 2;
+    const codec = await M.getFirstEncodableVideoCodec(['avc', 'vp9', 'hevc', 'av1', 'vp8'], { width: w, height: h });
+    if (!codec) return null;
+    const Q = { low: M.QUALITY_LOW, medium: M.QUALITY_MEDIUM, high: M.QUALITY_HIGH, 'very-high': M.QUALITY_VERY_HIGH }[opts.quality || 'medium'];
+    const output = new M.Output({ format: new M.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new M.BufferTarget() });
+    const video = { codec, bitrate: opts.bitrate || Q, forceTranscode: true, hardwareAcceleration: 'no-preference' };
+    if (scale !== 1) Object.assign(video, { width: w, height: h, fit: 'fill' });
+    if (opts.crop) video.crop = opts.crop;
+    if (opts.rotate) video.rotate = opts.rotate;
+    const conv = await M.Conversion.init({
+      input, output, video,
+      audio: opts.audioKbps === 0 ? { discard: true } : { bitrate: (opts.audioKbps || 128) * 1000 },
+      ...(opts.trim ? { trim: opts.trim } : {}),
+    });
+    if (!conv.isValid) return null;
+    const t0 = Date.now();
+    conv.onProgress = p => {
+      const el = (Date.now() - t0) / 1000, left = p > 0.03 ? el / p - el : 0;
+      progress([`${label}: ${Math.floor(p * 100)}%`, left > 5 && `осталось ~${left > 90 ? Math.round(left / 60) + ' мин' : Math.round(left) + ' с'}`].filter(Boolean).join(' · '));
+    };
+    wcCurrent = conv;
+    await progress(`${label}: 0%`);
+    await conv.execute();
+    wcCurrent = null;
+    return new Blob([output.target.buffer], { type: 'video/mp4' });
+  } catch (e) {
+    wcCurrent = null;
+    if (/cancel/i.test(e?.message || '') || e?.name === 'ConversionCanceledError') throw new Error('Обработка отменена.');
+    console.warn('WebCodecs не справился, переключаюсь на FFmpeg', e);
+    return null;
+  }
 }
 
 const outBlob = (data, ext) => new Blob([data], { type: MIME_BY_EXT[ext] || 'application/octet-stream' });
@@ -284,25 +343,38 @@ videoTool({
   ],
   async perFile(file, o, { progress }) {
     const info = await mediaInfo(file);
+    const result = blob => {
+      const note = `${fmtSize(file.size)} → ${fmtSize(blob.size)}, ${blob.size < file.size ? `−${Math.round((1 - blob.size / file.size) * 100)}%` : 'не меньше исходного'}`;
+      return { files: [{ blob, name: `${baseName(file.name)}_сжато.mp4`, note }], message: note };
+    };
+    let targetBps = 0;
+    if (o.mode === 'target') {
+      const mb = o.target === 'custom' ? Math.max(1, o.custom) : Number(o.target);
+      if (file.size <= mb * 1024 * 1024 && o.res === '0') return { files: [], message: `«${file.name}» уже меньше ${mb} МБ — сжимать не нужно.` };
+      targetBps = Math.floor((mb * 8 * 1024 * 1024 * 0.93 / Math.max(1, info.duration)) - (o.audio === 'none' ? 0 : Number(o.audio) * 1000));
+    }
+    // Быстрый путь — кодирование видеокартой; если браузер не умеет, ниже работает FFmpeg
+    if (!(o.mode === 'target' && targetBps < 60000)) {
+      const fast = await webcodecsMp4(file, { height: Number(o.res) || 0, quality: { smart: 'medium', strong: 'low', high: 'high' }[o.mode], bitrate: targetBps || undefined, audioKbps: o.audio === 'none' ? 0 : Number(o.audio) }, progress, 'Сжимаю');
+      if (fast) return result(fast);
+      await progress('Браузер не умеет быстрое сжатие этого видео — использую FFmpeg, это медленнее…');
+    }
     const vf = scaleTo(o.res);
     let video;
     if (o.mode === 'target') {
       const mb = o.target === 'custom' ? Math.max(1, o.custom) : Number(o.target);
-      if (file.size <= mb * 1024 * 1024 && o.res === '0') return { files: [], message: `«${file.name}» уже меньше ${mb} МБ — сжимать не нужно.` };
       const audioK = o.audio === 'none' ? 0 : Number(o.audio);
       const total = mb * 8 * 1024 * 0.95 / Math.max(1, info.duration);
       const vk = Math.floor(total - audioK);
       if (vk < 60) throw new Error(`Видео слишком длинное, чтобы уложиться в ${mb} МБ с нормальным качеством. Выберите больший размер, уменьшите разрешение или обрежьте видео.`);
       video = ['-c:v', 'libx264', '-preset', 'veryfast', '-b:v', `${vk}k`, '-maxrate', `${Math.round(vk * 1.2)}k`, '-bufsize', `${vk * 2}k`, '-pix_fmt', 'yuv420p'];
-    } else video = H264({ smart: 28, strong: 32, high: 23 }[o.mode], 'veryfast');
+    } else video = H264({ smart: 28, strong: 32, high: 23 }[o.mode], 'superfast');
     const name = inName(file);
     const { files } = await ffRun({
       inputs: [{ name, file }], duration: info.duration, progress, label: 'Сжимаю',
       args: ['-i', name, '-vf', vf, ...video, ...(o.audio === 'none' ? ['-an'] : AAC(o.audio)), ...FASTSTART, 'out.mp4'], outputs: ['out.mp4'],
     });
-    const blob = outBlob(files[0], 'mp4');
-    const note = `${fmtSize(file.size)} → ${fmtSize(blob.size)}, ${blob.size < file.size ? `−${Math.round((1 - blob.size / file.size) * 100)}%` : 'не меньше исходного'}`;
-    return { files: [{ blob, name: `${baseName(file.name)}_сжато.mp4`, note }], message: note };
+    return result(outBlob(files[0], 'mp4'));
   },
 });
 
@@ -339,6 +411,10 @@ function videoConverter(id, badge, title, desc, format, accept = VIDEO_ACCEPT) {
           const { files } = await ffRun({ inputs: [{ name, file }], args: ['-i', name, '-map', '0:v:0?', '-map', '0:a:0?', '-c', 'copy', ...(o.format === 'mp4' || o.format === 'mov' ? FASTSTART : []), out], outputs: [out], duration: info.duration, progress, label: 'Перекладываю' });
           return [{ blob: outBlob(files[0], o.format), name: `${baseName(file.name)}.${o.format}`, note: 'без перекодирования' }];
         } catch { await progress('Без перекодирования не получилось — перекодирую…'); }
+      }
+      if (o.format === 'mp4') {
+        const fast = await webcodecsMp4(file, { height: Number(o.res) || 0, quality: 'high' }, progress, 'Конвертирую');
+        if (fast) return [{ blob: fast, name: `${baseName(file.name)}.mp4` }];
       }
       const { files } = await ffRun({ inputs: [{ name, file }], args: ['-i', name, '-vf', scaleTo(o.res), ...convertArgs(o.format), out], outputs: [out], duration: info.duration, progress, label: 'Конвертирую' });
       return [{ blob: outBlob(files[0], o.format), name: `${baseName(file.name)}.${o.format}` }];
@@ -477,6 +553,10 @@ videoTool({
   ],
   async perFile(file, o, { progress }) {
     const info = await mediaInfo(file), name = inName(file);
+    if (o.mode === 'scale' && o.res !== 'custom') {
+      const fast = await webcodecsMp4(file, { height: Number(o.res), quality: 'high' }, progress, 'Меняю размер');
+      if (fast) return [{ blob: fast, name: `${baseName(file.name)}_${o.res}p.mp4` }];
+    }
     let vfArgs;
     if (o.mode === 'scale') vfArgs = ['-vf', o.res === 'custom' ? `scale=${Math.round(o.width / 2) * 2}:-2` : `scale=-2:${o.res}`];
     else {
@@ -503,6 +583,10 @@ videoTool({
     const info = await mediaInfo(file), name = inName(file);
     const vf = [{ 90: 'transpose=1', 270: 'transpose=2', 180: 'transpose=1,transpose=1' }[o.angle], o.fh && 'hflip', o.fv && 'vflip'].filter(Boolean);
     if (!vf.length) throw new Error('Выберите поворот или отражение.');
+    if (!o.fh && !o.fv) {
+      const fast = await webcodecsMp4(file, { rotate: Number(o.angle), quality: 'high' }, progress, 'Поворачиваю');
+      if (fast) return [{ blob: fast, name: `${baseName(file.name)}_повёрнуто.mp4` }];
+    }
     const { files } = await ffRun({ inputs: [{ name, file }], args: ['-i', name, '-vf', vf.join(','), ...H264(20), '-c:a', 'copy', ...FASTSTART, 'out.mp4'], outputs: ['out.mp4'], duration: info.duration, progress, label: 'Поворачиваю' });
     return [{ blob: outBlob(files[0], 'mp4'), name: `${baseName(file.name)}_повёрнуто.mp4` }];
   },

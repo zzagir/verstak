@@ -88,6 +88,8 @@ const EN_DICT = {
   'Найдено: ${1}. Enter — следующее': 'Found: {1}. Enter — next', 'Ничего не найдено': 'Nothing found', 'ИСТИНА': 'TRUE', 'ЛОЖЬ': 'FALSE',
   '${1} × ${2} · без оформления': '{1} × {2} · without formatting', '${1} × ${2} · показаны первые ${3} строк и ${4} столбцов': '{1} × {2} · first {3} rows and {4} columns shown',
   // Видео
+  'Браузер не умеет быстрое сжатие этого видео — использую FFmpeg, это медленнее…': 'The browser cannot fast-compress this video — using FFmpeg, which is slower…',
+  'кадр ${1}': 'frame {1}', 'осталось ~${1} мин': '~{1} min left', 'осталось ~${1} с': '~{1} s left',
   'Реверс требует много памяти: лучше всего работает с роликами до 1 минуты. Видео обрабатывается на вашем устройстве. При первом запуске загружается видеодвижок (~32 МБ). Обработка идёт медленнее, чем в программах на компьютере: минута видео в HD — обычно 1–3 минуты.': 'Reversing needs a lot of memory: it works best with clips up to 1 minute. Video is processed on your device. The video engine (~32 MB) loads on first use. Processing is slower than in desktop software: a minute of HD video usually takes 1–3 minutes.',
   'MP4, MOV, WEBM, MKV, AVI, WMV, 3GP и другие': 'MP4, MOV, WEBM, MKV, AVI, WMV, 3GP and more',
   'Видео обрабатывается на вашем устройстве. При первом запуске загружается видеодвижок (~32 МБ). Обработка идёт медленнее, чем в программах на компьютере: минута видео в HD — обычно 1–3 минуты.': 'Video is processed on your device. The video engine (~32 MB) loads on first use. Processing is slower than in desktop software: a minute of HD video usually takes 1–3 minutes.',
