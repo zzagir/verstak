@@ -35,6 +35,7 @@ const LIBS = {
   hljs: ['vendor/view/highlight.min.js'],
   exif: ['vendor/view/full.umd.js'],
   upng: ['vendor/codecs/upng.min.js'],
+  ffmpeg: ['vendor/video/ffmpeg.js'],
 };
 const libCache = {};
 
@@ -295,6 +296,7 @@ async function ensureFont(spec) {
 const CATS = {
   pdf: { title: 'PDF', lead: 'Объединение, разделение, сжатие и конвертация PDF-файлов.' },
   image: { title: 'Изображения', lead: 'Сжатие, размер, обрезка, форматы и простые правки фото.' },
+  video: { title: 'Видео и аудио', short: 'Видео', lead: 'Сжатие, обрезка, конвертация, GIF, звук, субтитры, запись экрана — прямо в браузере, без загрузки на сервер.' },
   text: { title: 'Текст', lead: 'Транслит, регистр, типограф, SEO-анализ и оформление текста.' },
   docs: { title: 'Документы и просмотр', short: 'Документы', lead: 'Откройте и конвертируйте Excel, Word, PowerPoint, DjVu, архивы, письма, книги и другие файлы без установки программ.' },
   dev: { title: 'Кодирование и генераторы', short: 'Утилиты', lead: 'Base64, хеши, JSON, QR-коды, пароли и другие утилиты.' },
@@ -463,6 +465,10 @@ function renderResults(box, res) {
       `Скачать ${files[0].name}`));
   }
 
+  if (files.length === 1 && /^(video|audio)\//.test(files[0].blob.type)) {
+    const url = URL.createObjectURL(files[0].blob);
+    box.append(el(files[0].blob.type.startsWith('video') ? 'video' : 'audio', { class: 'media-view result-media', src: url, controls: true, playsinline: true, preload: 'metadata' }));
+  }
   const list = el('ul', { class: 'file-list result-list' });
   for (const f of files) {
     list.append(el('li', { class: 'file' },
@@ -505,12 +511,16 @@ const toolLink = id => USE_PAGES ? `${ROOT}${LANG_PREFIX()}${id}/` : `#${id}`;
 const NEXT_TOOLS = {
   pdf: ['compress-pdf', 'merge-pdf', 'edit-pdf', 'sign-pdf', 'organize-pdf', 'page-numbers', 'watermark-pdf', 'split-pdf', 'pdf-to-jpg', 'ocr'],
   image: ['compress-image', 'resize-image', 'crop-image', 'watermark-image', 'remove-bg', 'convert-image', 'jpg-to-pdf', 'photo-editor'],
+  video: ['compress-video', 'trim-video', 'crop-video', 'video-to-gif', 'extract-audio', 'add-audio', 'watermark-video', 'convert-video', 'video-speed'],
+  audio: ['audio-converter', 'trim-audio', 'video-volume'],
 };
 
 /** Блок «Что дальше?»: результат открывается в другом инструменте без повторной загрузки. */
 function nextSteps(files) {
   const kind = files.every(f => f.blob.type === 'application/pdf' || /\.pdf$/i.test(f.name)) ? 'pdf'
-    : files.every(f => (f.blob.type || '').startsWith('image/')) ? 'image' : null;
+    : files.every(f => (f.blob.type || '').startsWith('image/') && f.blob.type !== 'image/gif') ? 'image'
+    : files.every(f => /^video\//.test(f.blob.type || '')) ? 'video'
+    : files.every(f => /^audio\//.test(f.blob.type || '')) ? 'audio' : null;
   if (!kind || typeof indexedDB === 'undefined') return null;
   const current = document.querySelector('#tool-root')?.dataset.tool;
   const ids = NEXT_TOOLS[kind].filter(id => id !== current && TOOLS.some(t => t.id === id)).slice(0, 7);
@@ -575,6 +585,7 @@ function fileToolUI(root, cfg) {
   const status = el('div', { class: 'status', role: 'status', 'aria-live': 'polite' });
   const results = el('div', { class: 'results' });
   const runBtn = el('button', { class: 'btn primary big', type: 'button', disabled: true }, cfg.action || 'Обработать');
+  const cancelBtn = el('button', { class: 'btn small ghost status-cancel', type: 'button', onclick: () => cfg.cancel && cfg.cancel() }, 'Отмена');
   const dz = dropzone({ accept: cfg.accept, multiple: cfg.multiple, hint: cfg.hint, onFiles: add });
   const more = el('button', { class: 'btn ghost', type: 'button', onclick: () => dz.pick() },
     cfg.multiple ? '+ Добавить файлы' : 'Выбрать другой файл');
@@ -642,7 +653,7 @@ function fileToolUI(root, cfg) {
     }
     runBtn.disabled = true;
     results.replaceChildren();
-    const progress = msg => { setStatus(status, 'busy', msg); return tick(); };
+    const progress = msg => { setStatus(status, 'busy', msg); if (cfg.cancel) status.firstChild?.append(cancelBtn); return tick(); };
     try {
       await progress('Подготовка…');
       await Promise.all((cfg.libs || []).map(loadLib));
